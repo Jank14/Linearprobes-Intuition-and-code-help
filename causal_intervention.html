@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Does the model use it? — TARA</title>
+<style>:root { --teal:#0E7C7B; --teal-lt:#DCEEED; --coral:#E4572E; --coral-lt:#FBE4DC; --purple:#6C4AB6; --purple-lt:#EAE3F7; --amber:#B7791F; --amber-lt:#FDF1D6; --ink:#1A1A1A; --muted:#4F5A63; --line:#C9D0D5; --bg:#F2F4F5; --code:#1E1E2E; }
+* { box-sizing:border-box; }
+html { font-size:20px; }
+@media (min-width:1600px) { html { font-size:22px; } }
+body { font-family:Calibri, Carlito, "Segoe UI", Arial, sans-serif; margin:0; padding:28px 40px 60px; background:#fff; color:var(--ink); line-height:1.35; }
+.wrap { max-width:1720px; margin:0 auto; }
+h1 { font-size:2.1rem; margin:0; }
+.sub { color:var(--muted); font-size:1.1rem; margin:6px 0 22px; }
+.kicker { font-size:0.85rem; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:var(--teal); }
+h2 { font-size:1.45rem; margin:0 0 6px; }
+.panel { border:2px solid var(--line); border-radius:18px; padding:24px 28px; margin-bottom:26px; }
+.desc { color:var(--muted); font-size:1.05rem; margin:0 0 18px; max-width:1300px; }
+code, .mono { font-family:"Courier New", "DejaVu Sans Mono", monospace; }
+button { font-family:inherit; font-size:1rem; font-weight:bold; padding:12px 20px; border-radius:12px; border:2px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+button:hover { border-color:var(--teal); }
+button.primary { background:var(--teal); border-color:var(--teal); color:#fff; }
+button:disabled { opacity:0.35; cursor:not-allowed; }
+.seg { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; flex-wrap:wrap; }
+.seg button { border:none; border-radius:0; color:var(--muted); }
+.seg button + button { border-left:2px solid var(--line); }
+.seg button.on { background:var(--teal); color:#fff; }
+.seg.coral button.on { background:var(--coral); }
+.seg.purple button.on { background:var(--purple); }
+.row { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+.col { flex:1; min-width:360px; }
+.ctrl { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.ctrl label { font-weight:bold; color:var(--muted); }
+/* code + pseudocode pair: each row = [code | plain English] */
+.codepair { display:grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); border-radius:14px; overflow:hidden; border:2px solid var(--code); }
+.codepair .c { background:var(--code); color:#E4E4EF; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.95rem; }
+.codepair .p { background:#FAFBFC; font-size:1rem; }
+.codepair .hd { font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; font-weight:bold; padding:14px 18px 8px; color:#9A9AB0; font-family:Calibri, Carlito, sans-serif; }
+.codepair .hd.p { color:var(--muted); }
+.codepair .pad { height:12px; }
+.ln { padding:4px 18px; border-left:6px solid transparent; transition:background .25s, opacity .25s; }
+.ln.c { white-space:pre-wrap; word-break:break-word; }
+.ln.c.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.ln.p.on { background:var(--teal-lt); border-left-color:var(--teal); font-weight:bold; }
+.ln.c.done { color:#8C8CA6; } .ln.c.done span { color:inherit; } .ln.p.done { color:#8A949C; }
+.kw{color:#D19BE0;} .str{color:#F0A77F;} .com{color:#7FBF7F;} .num{color:#B5CEA8;}
+/* flow diagram */
+.flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; row-gap:14px; }
+.node { border:3px solid var(--line); background:var(--bg); border-radius:14px; padding:10px 14px; min-width:120px; text-align:center; transition:all .3s; }
+.node .t { font-weight:bold; font-size:1.05rem; }
+.node .h { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); margin-top:4px; }
+.node.on { border-color:var(--teal); background:var(--teal-lt); box-shadow:0 0 0 5px rgba(14,124,123,.18); }
+.node.bad { border-color:var(--coral); background:var(--coral-lt); }
+.node.dim { opacity:.35; }
+.arr { align-self:center; font-size:1.6rem; color:var(--muted); padding:0 8px; }
+.status { margin-top:16px; padding:14px 18px; border-radius:12px; background:var(--bg); font-size:1.1rem; min-height:56px; }
+.status.good { background:var(--teal-lt); color:#0a5e5d; }
+.status.bad { background:var(--coral-lt); color:#a53a1b; }
+.note { background:var(--amber-lt); border-radius:12px; padding:14px 18px; font-size:1rem; margin-top:10px; }
+.hgrid { display:inline-grid; gap:3px; }
+.hcell { border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:#fff; font-family:"Courier New",monospace; }
+.axis { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+.big { font-size:2.4rem; font-weight:bold; font-family:"Courier New",monospace; }
+.pill { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.9rem; }
+.keys { animation:kfade .8s 6s forwards; position:fixed; right:18px; bottom:14px; font-size:0.8rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+.vec { display:inline-grid; grid-template-columns:repeat(6,18px); gap:2px; vertical-align:middle; }
+.vec div { width:18px; height:18px; border-radius:3px; }
+/* stepper */
+.stepper { border:2px solid var(--line); border-radius:18px; padding:18px 22px; margin:14px 0 26px; background:#fff; }
+.st-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.st-head .st-count { color:var(--muted); margin-left:6px; }
+.st-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr); gap:22px; align-items:start; }
+@media (max-width:1100px) { .st-body { grid-template-columns:1fr; } }
+.st-vis { min-height:380px; }
+.st-say { background:var(--teal-lt); color:#0a5e5d; font-weight:bold; font-size:1.2rem; border-radius:14px; padding:16px 18px; line-height:1.4; }
+.st-ex { margin-top:12px; background:var(--amber-lt); border-radius:14px; padding:12px 16px; font-size:1.02rem; }
+.st-ex b { display:block; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--amber); margin-bottom:4px; }
+.st-code { margin-top:12px; background:var(--code); border-radius:14px; padding:10px 0 12px; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.9rem; color:#E4E4EF; }
+.st-code .hd { font-family:Calibri,Carlito,sans-serif; font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#9A9AB0; font-weight:bold; padding:4px 16px 8px; }
+.st-code .l { padding:4px 16px; white-space:pre-wrap; border-left:6px solid transparent; }
+.st-code .l.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.st-code .l.future { color:#6A6A84; } .st-code .l.future span { color:inherit !important; }
+.vn { display:inline-grid; gap:3px; }
+.vn div { border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:"Courier New",monospace; font-weight:bold; font-size:0.82rem; border:1px solid #E1E5E8; }
+.bars { display:flex; gap:10px; align-items:flex-end; }
+.bars .b { text-align:center; width:52px; }
+.bars .bt { display:flex; align-items:flex-end; justify-content:center; }
+.bars .bf { width:36px; border-radius:6px 6px 0 0; transition:height .4s; }
+.bars .bv { font-size:0.75rem; color:var(--muted); height:20px; }
+.bars .bl { font-weight:bold; font-family:"Courier New",monospace; margin-top:4px; }
+.vbox { border:3px solid var(--line); border-radius:14px; padding:10px 12px; background:#fff; display:inline-block; vertical-align:top; transition:all .3s; }
+.vbox .vt { font-size:0.8rem; font-weight:bold; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+.vbox.on { border-color:var(--teal); box-shadow:0 0 0 5px rgba(14,124,123,.15); }
+.vbox.dim { opacity:.28; }
+.varr { display:inline-flex; align-items:center; font-size:1.8rem; color:var(--muted); padding:0 6px; align-self:center; }
+.vrow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; row-gap:12px; }
+.picker { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+.picker button { border:none; border-radius:0; width:54px; font-family:"Courier New",monospace; font-size:1.2rem; padding:10px 0; }
+.picker button + button { border-left:2px solid var(--line); }
+.picker button.on { background:var(--purple); color:#fff; }
+.tokrow2 { display:flex; gap:10px; flex-wrap:wrap; }
+.tk2 { min-width:70px; padding:12px 10px; text-align:center; border:3px solid var(--line); border-radius:12px; font-weight:bold; font-size:1.3rem; background:#fff; transition:all .3s; }
+.tk2 small { display:block; font-weight:normal; font-size:0.7rem; color:var(--muted); font-family:"Courier New",monospace; }
+.legend { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+/* presenter bar */
+.pbar { position:sticky; top:0; z-index:50; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.96); padding:10px 0 12px; margin:-6px 0 12px; border-bottom:2px solid var(--line); }
+.pbar button { padding:8px 14px; font-size:0.9rem; border-radius:10px; }
+.pbar button.sec b { color:var(--teal); margin-right:4px; }
+.pbar button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+.pbar button.on b { color:#fff; }
+.pbar .sp { flex:1; }
+.st-head { position:relative; }
+
+sub { font-size:0.62em; color:inherit; opacity:.75; margin-left:1px; }
+.stepper { scroll-margin-top:84px; }
+
+
+.scat { background:#fff; border:2px solid var(--line); border-radius:14px; }
+.lbl { font-size:0.8rem; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:4px 0 6px; }
+.chip { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.85rem; margin:2px 4px 2px 0; }
+.chip.t { background:var(--teal-lt); color:#0a5e5d; } .chip.f { background:var(--coral-lt); color:#a53a1b; } .chip.p { background:var(--purple-lt); color:#4b2f8f; } .chip.a { background:var(--amber-lt); color:#7a4f10; } .chip.g { background:var(--bg); color:var(--muted); }
+.stat { display:inline-block; text-align:center; padding:10px 16px; border-radius:14px; background:var(--bg); margin:6px 8px 6px 0; min-width:120px; }
+.stat .v { font-family:"Courier New",monospace; font-weight:bold; font-size:1.6rem; }
+.stat .k { font-size:0.8rem; color:var(--muted); font-weight:bold; letter-spacing:1px; text-transform:uppercase; }
+.illus { font-size:0.95rem; color:var(--muted); font-style:italic; margin-top:6px; }
+.tokrow { display:flex; flex-wrap:wrap; gap:4px; align-items:flex-end; }
+.tok { font-family:"Courier New",monospace; font-size:0.95rem; padding:6px 8px; border-radius:8px; border:2px solid var(--line); background:#fff; transition:all .3s; white-space:pre; }
+.tok.pad { color:#9aa3aa; background:#F4F5F6; border-style:dashed; }
+.tok.hi { border-color:var(--teal); background:var(--teal-lt); font-weight:bold; }
+.tok.bad { border-color:var(--coral); background:var(--coral-lt); font-weight:bold; }
+.tok.pu { border-color:var(--purple); background:var(--purple-lt); font-weight:bold; }
+.tok.dim { opacity:.35; }
+table.grid { border-collapse:separate; border-spacing:4px; }
+table.grid td, table.grid th { font-family:"Courier New",monospace; font-size:0.9rem; padding:6px 8px; border-radius:8px; text-align:center; }
+table.grid th { color:var(--muted); font-weight:bold; font-size:0.78rem; }
+.slider { width:100%; accent-color:var(--teal); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:1100px) { .two { grid-template-columns:1fr; } }
+.card { border:2px solid var(--line); border-radius:14px; padding:12px 16px; background:#fff; }
+.card h4 { margin:0 0 6px; font-size:1.05rem; }
+.shape { font-family:"Courier New",monospace; font-weight:bold; color:var(--purple); }
+
+#s1 .st-body, #s2 .st-body { grid-template-columns:minmax(0,2.3fr) minmax(280px,1fr); }
+.prompt { font-family:"Courier New",monospace; font-size:1.05rem; background:var(--bg); border-radius:12px; padding:10px 14px; line-height:1.55; }
+.prompt .ex { color:var(--muted); }
+.meter { position:relative; height:46px; background:linear-gradient(90deg, var(--coral-lt), #fff 50%, var(--teal-lt)); border:2px solid var(--line); border-radius:12px; margin:8px 0 4px; }
+.meter .z { position:absolute; left:50%; top:-4px; bottom:-4px; width:2px; background:var(--ink); }
+.meter .n { position:absolute; top:4px; width:14px; height:34px; margin-left:-7px; border-radius:6px; transition:left .5s; }
+.meter .ghost { opacity:.35; }
+.mlab { display:flex; justify-content:space-between; font-size:1rem; color:var(--muted); font-weight:bold; }
+.lgrid { display:grid; gap:1px; }
+.lgrid div { height:6px; border-radius:2px; background:#EEF0F2; }
+.lgrid div.on { background:var(--purple); }
+.lgrid div.tick { outline:1px solid #C9D0D5; }
+@keyframes kfade { to { opacity:0; visibility:hidden; } }
+</style></head>
+<body><div class="wrap">
+<div class="kicker">TARA · Week 5 · Section 3 · Causal interventions</div>
+<h1>Does the model USE the direction? — adding θ for MM and for LR</h1>
+<div class="sub">Follows notebook Section 3. Accuracy only shows a direction is <b>correlated</b> with truth. To show the model <b>uses</b> it, we add a vector <b>θ</b> to the hidden states mid-forward-pass and watch the answer <b>P(TRUE) − P(FALSE)</b>. The notebook does this twice — once with θ built from the <b>MM</b> probe, once from the <b>LR</b> probe — and compares how far each moves the model.</div>
+
+<h2>1 · What θ is — for MM and for LR</h2>
+<div id="sth"></div>
+<h2>2 · Adding θ to one statement — what it should do</h2>
+<div id="spush"></div>
+<h2>3 · Three edits — add, subtract, remove θ</h2>
+<div id="sedit"></div>
+<h2>4 · The real experiment — prompt, tokens, layers 8–14</h2>
+<div id="s1"></div>
+<h2>5 · How we check it worked — 3 runs × 2 subsets, then NIE for MM vs LR</h2>
+<div id="snie"></div>
+<div class="note">Sections 1, 2, 3 and 5 use toy geometry and illustrative numbers to show the shapes; your notebook run prints the real ones.</div>
+</div>
+<script>// ===== TARA kit (shared with Week 4 pages) =====
+
+function seededRand(seed) { let s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+function softmax(arr) { const m = Math.max(...arr.filter(v => v > -1e8)); const ex = arr.map(v => v <= -1e8 ? 0 : Math.exp(v - m)); const s = ex.reduce((a, b) => a + b, 0); return ex.map(v => v / s); }
+
+function argmax(a) { let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; }
+
+function rampColor(w, base = [14, 124, 123]) { const t = Math.max(0, Math.min(1, w)); return `rgb(${Math.round(255 - t * (255 - base[0]))},${Math.round(255 - t * (255 - base[1]))},${Math.round(255 - t * (255 - base[2]))})`; }
+
+function divColor(v, bound = 1) { const t = Math.max(-1, Math.min(1, v / bound)); if (t >= 0) return rampColor(t); return `rgb(255,${Math.round(255 + t * (255 - 87))},${Math.round(255 + t * (255 - 46))})`; }
+
+function hl(line) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  let code = line, com = '';
+  const ci = line.indexOf('#'); if (ci >= 0) { code = line.slice(0, ci); com = line.slice(ci); }
+  let out = esc(code).replace(/("[^"]*"|'[^']*')|\b(def|return|for|in|if|else|lambda|None|True|False|with|try|finally|class)\b|\b(\d+(?:\.\d+)?)\b/g, (m, s, k, n) => s ? `<span class="str">${s}</span>` : k ? `<span class="kw">${k}</span>` : `<span class="num">${n}</span>`);
+  return out + (com ? `<span class="com">${esc(com)}</span>` : '');
+}
+
+function codePair(el, title, rows) {
+  el.classList.add('codepair');
+  el.innerHTML = `<div class="hd c">${title}</div><div class="hd p">what it does</div>` +
+    rows.map((r, i) => `<div class="ln c" data-i="${i}">${r.code ? hl(r.code) : '&nbsp;'}</div><div class="ln p" data-i="${i}">${r.say || '&nbsp;'}</div>`).join('') +
+    `<div class="c pad"></div><div class="p pad"></div>`;
+  return (on = [], doneBelow = -1) => el.querySelectorAll('.ln').forEach(d => { const i = +d.dataset.i; d.classList.toggle('on', on.includes(i)); d.classList.toggle('done', i < doneBelow && !on.includes(i)); });
+}
+
+// ---------------- Stepper: every section = ① Intuition steps, then ② Code steps, one shared visual ----------------
+const STEPPERS = [];
+function Stepper(root, cfg) {
+  // cfg: { intuition:[{say, ex, v}], code:{file, lines:[...], steps:[{a:[...], say, v}]}, render(v, mode, k, vis) }
+  if (typeof root === 'string') root = document.getElementById(root);
+  root.classList.add('stepper');
+  const hasCode = !!cfg.code;
+  root.innerHTML = `<div class="st-head">
+      <div class="seg st-modes"><button data-m="i" class="on">① Intuition</button>${hasCode ? '<button data-m="c">② Pseudocode</button>' : ''}</div>
+      <button class="st-back">◀ Back</button><button class="primary st-next">Next ▶</button><span class="st-count mono"></span></div>
+    <div class="st-body"><div class="st-vis"></div><div class="st-side"><div class="st-say"></div><div class="st-ex"></div><div class="st-code"></div></div></div>`;
+  const q = s => root.querySelector(s);
+  const self = { mode: 'i', k: 0, root };
+  const steps = () => self.mode === 'i' ? cfg.intuition : cfg.code.steps;
+  self.render = () => {
+    const st = steps()[self.k];
+    root.querySelectorAll('.st-modes button').forEach(b => b.classList.toggle('on', b.dataset.m === self.mode));
+    q('.st-say').innerHTML = st.say;
+    q('.st-ex').innerHTML = st.ex ? `<b>Example</b> ${st.ex}` : '';
+    q('.st-ex').style.display = st.ex ? 'block' : 'none';
+    if (self.mode === 'c') {
+      const last = Math.max(...st.a);
+      q('.st-code').style.display = 'block';
+      q('.st-code').innerHTML = `<div class="hd">${cfg.code.file}</div>` + cfg.code.lines.map((l, i) => `<div class="l ${st.a.includes(i) ? 'on' : ''} ${i > last ? 'future' : ''}">${l ? hl(l.replace(/(\S)\s{2,}#/, '$1  #')) : '&nbsp;'}</div>`).join('');
+    } else q('.st-code').style.display = 'none';
+    q('.st-count').textContent = `${self.mode === 'i' ? 'intuition' : 'pseudocode'} · step ${self.k + 1} / ${steps().length}`;
+    q('.st-back').disabled = self.k === 0 && self.mode === 'i';
+    q('.st-next').disabled = self.k === steps().length - 1 && (self.mode === 'c' || !hasCode);
+    q('.st-next').textContent = (self.k === steps().length - 1 && self.mode === 'i' && hasCode) ? 'Go to pseudocode ▶' : 'Next ▶';
+    cfg.render(st.v || {}, self.mode, self.k, q('.st-vis'));
+  };
+  self.next = () => { if (self.k < steps().length - 1) self.k++; else if (self.mode === 'i' && hasCode) { self.mode = 'c'; self.k = 0; } self.render(); };
+  self.back = () => { if (self.k > 0) self.k--; else if (self.mode === 'c') { self.mode = 'i'; self.k = cfg.intuition.length - 1; } self.render(); };
+  q('.st-next').onclick = self.next; q('.st-back').onclick = self.back;
+  root.querySelectorAll('.st-modes button').forEach(b => b.onclick = () => { self.mode = b.dataset.m; self.k = 0; self.render(); });
+  STEPPERS.push(self); self.render();
+  return self;
+}
+// ---------------- presenter mode: one section at a time, tabs, keys, text size, full screen ----------------
+let ACTIVE_ST = null;
+function nearestStepper() {
+  if (ACTIVE_ST && ACTIVE_ST.root.offsetParent !== null) return ACTIVE_ST;
+  const mid = window.innerHeight / 2; let best = STEPPERS[0], bd = 1e9;
+  STEPPERS.forEach(s => { const r = s.root.getBoundingClientRect(); const d = Math.abs((r.top + r.bottom) / 2 - mid); if (r.bottom > 0 && r.top < window.innerHeight && d < bd) { bd = d; best = s; } });
+  return best;
+}
+function setFont(px) { document.documentElement.style.fontSize = px + 'px'; try { localStorage.setItem('tara-font', px); } catch (e) {} }
+function curFont() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
+window.addEventListener('load', () => {
+  try { const f = localStorage.getItem('tara-font'); if (f) setFont(+f); } catch (e) {}
+  const secs = STEPPERS.map(st => { let h = st.root.previousElementSibling; while (h && h.tagName !== 'H2') h = h.previousElementSibling; return { st, h }; });
+  secs.sort((x, y) => (x.st.root.compareDocumentPosition(y.st.root) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  const wrap = document.querySelector('.wrap'); if (!wrap || !secs.length) return;
+  const bar = document.createElement('div'); bar.className = 'pbar';
+  bar.innerHTML = (secs.length > 1 ? secs.map((s, i) => `<button class="sec" data-i="${i}"><b>${i + 1}</b> ${(s.h ? s.h.textContent : 'Section ' + (i + 1)).replace(/^\s*\d+\s*·\s*/, '').split(/ — | – /)[0]}</button>`).join('') : '') +
+    `<span class="sp"></span><button data-a="-" title="smaller text (−)">A−</button><button data-a="+" title="bigger text (+)">A+</button><button data-a="f" title="full screen (F)">⛶</button>` + (secs.length > 1 ? `<button data-a="all" title="show every section (0)">all</button>` : '');
+  const sub = wrap.querySelector('.sub'); (sub || wrap.firstChild).after(bar);
+  let all = secs.length < 2;
+  window.showSection = i => {
+    ACTIVE_ST = all ? null : secs[i].st;
+    secs.forEach((s, j) => { const on = all || j === i; s.st.root.style.display = on ? '' : 'none'; if (s.h) s.h.style.display = on ? '' : 'none'; });
+    bar.querySelectorAll('.sec').forEach(b => b.classList.toggle('on', !all && +b.dataset.i === i));
+    const ab = bar.querySelector('[data-a="all"]'); if (ab) ab.classList.toggle('on', all);
+    if (!all) { const top = bar.getBoundingClientRect().top + window.scrollY; if (window.scrollY > top) window.scrollTo(0, top); }
+  };
+  bar.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.i != null) { all = false; showSection(+b.dataset.i); }
+    else if (b.dataset.a === '+') setFont(curFont() + 2);
+    else if (b.dataset.a === '-') setFont(Math.max(14, curFont() - 2));
+    else if (b.dataset.a === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (b.dataset.a === 'all') { all = !all; showSection(Math.max(0, secs.findIndex(s => s.st === ACTIVE_ST))); }
+  };
+  showSection(0);
+  window._secs = secs.length;
+  const kh = document.createElement('div'); kh.className = 'keys'; kh.textContent = '→ next · ← back' + (secs.length > 1 ? ' · 1–' + secs.length + ' section' : '') + ' · C intuition/pseudocode · + − text size · F full screen'; document.body.appendChild(kh);
+});
+document.addEventListener('keydown', e => {
+  if (!STEPPERS.length || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const best = nearestStepper();
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); best.next(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); best.back(); }
+  else if (/^[1-9]$/.test(e.key) && window.showSection && +e.key <= (window._secs || 0) && window._secs > 1) window.showSection(+e.key - 1);
+  else if (e.key === '+' || e.key === '=') setFont(curFont() + 2);
+  else if (e.key === '-') setFont(Math.max(14, curFont() - 2));
+  else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+  else if (e.key === 'c' || e.key === 'C') { best.mode = best.mode === 'i' ? 'c' : 'i'; best.k = 0; best.render(); }
+});
+
+function gauss(rand) { let u = 0, v = 0; while (u === 0) u = rand(); while (v === 0) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const COL = { t:'#0E7C7B', f:'#E4572E', p:'#6C4AB6', a:'#B7791F', g:'#8A949C', ink:'#1A1A1A', line:'#C9D0D5' };
+// generic SVG scatter. pts: [{x,y,c,o}] ; opts: {w,h,pad,xr,yr,lines:[{x1,y1,x2,y2,c,w,dash,arrow,label}], xlab, ylab}
+function scatterSVG(pts, o = {}) {
+  const W = o.w || 520, H = o.h || 380, P = o.pad || 36;
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const xr = o.xr || [Math.min(...xs), Math.max(...xs)], yr = o.yr || [Math.min(...ys), Math.max(...ys)];
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - 2 * P), sy = y => H - P - (y - yr[0]) / (yr[1] - yr[0]) * (H - 2 * P);
+  const UID = (window._svgN = (window._svgN || 0) + 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><defs>` +
+    ['t','f','p','a','g','ink'].map(k => `<marker id="ar${k}_${UID}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COL[k]}"/></marker>`).join('') + `</defs>`;
+  if (o.axes !== false) { s += `<line x1="${P}" y1="${H - P}" x2="${W - P / 2}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/><line x1="${P}" y1="${H - P}" x2="${P}" y2="${P / 2}" stroke="#C9D0D5" stroke-width="2"/>`;
+    if (o.xlab) s += `<text x="${W - P}" y="${H - 10}" text-anchor="end" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.xlab}</text>`;
+    if (o.ylab) s += `<text x="12" y="${P / 2 + 4}" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.ylab}</text>`; }
+  (o.under || []).forEach(q => { s += q(sx, sy); });
+  pts.forEach(p => { s += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${p.r || 5}" fill="${p.c || COL.g}" fill-opacity="${p.o ?? 0.7}" ${p.s ? `stroke="${p.s}" stroke-width="2.5"` : ''}/>`; });
+  s += `<clipPath id="cp${W}${H}"><rect x="${P}" y="${P / 2}" width="${W - 1.5 * P}" height="${H - 1.5 * P}"/></clipPath>`;
+  (o.lines || []).forEach(l => { const col = COL[l.c] || l.c; s += `<line x1="${sx(l.x1)}" y1="${sy(l.y1)}" x2="${sx(l.x2)}" y2="${sy(l.y2)}" stroke="${col}" stroke-width="${l.w || 3}" ${l.clip ? `clip-path="url(#cp${W}${H})"` : ''} ${l.dash ? 'stroke-dasharray="8 6"' : ''} ${l.arrow ? `marker-end="url(#ar${l.c}_${UID})"` : ''}/>`;
+    if (l.label) s += `<text x="${sx(l.x2) + (l.dx || 6)}" y="${sy(l.y2) + (l.dy || -6)}" font-size="18" font-weight="bold" fill="${col}" font-family="Calibri,Carlito,sans-serif">${l.label}</text>`; });
+  (o.marks || []).forEach(m => { s += `<g><circle cx="${sx(m.x)}" cy="${sy(m.y)}" r="9" fill="#fff" stroke="${COL[m.c] || m.c}" stroke-width="4"/>${m.label ? `<text x="${sx(m.x) + 12}" y="${sy(m.y) + 5}" font-size="17" font-weight="bold" fill="${COL[m.c] || m.c}" font-family="Calibri,Carlito,sans-serif">${m.label}</text>` : ''}</g>`; });
+  (o.texts || []).forEach(t => { s += `<text x="${sx(t.x)}" y="${sy(t.y)}" font-size="${t.size || 17}" font-weight="bold" fill="${COL[t.c] || t.c || '#4F5A63'}" text-anchor="${t.anchor || 'start'}" font-family="Calibri,Carlito,sans-serif">${t.t}</text>`; });
+  return s + '</svg>';
+}
+// simple line/curve chart: series [{pts:[[x,y]..], c, dash, w}]
+function lineSVG(series, o = {}) {
+  const W = o.w || 520, H = o.h || 300, P = 44;
+  const xr = o.xr, yr = o.yr;
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - P - 16), sy = y => H - P + 6 - (y - yr[0]) / (yr[1] - yr[0]) * (H - P - 20);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat">`;
+  (o.yticks || []).forEach(v => { s += `<line x1="${P}" x2="${W - 16}" y1="${sy(v)}" y2="${sy(v)}" stroke="#EEF0F2"/><text x="${P - 6}" y="${sy(v) + 5}" font-size="16" text-anchor="end" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.xticks || []).forEach(v => { s += `<text x="${sx(v)}" y="${H - P + 24}" font-size="16" text-anchor="middle" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.bands || []).forEach(b => { s += `<rect x="${sx(b[0])}" y="${sy(yr[1])}" width="${sx(b[1]) - sx(b[0])}" height="${sy(yr[0]) - sy(yr[1])}" fill="${b[2] || '#DCEEED'}" opacity=".6"/>`; });
+  series.forEach(se => { s += `<polyline fill="none" stroke="${COL[se.c] || se.c}" stroke-width="${se.w || 3}" ${se.dash ? 'stroke-dasharray="7 6"' : ''} points="${se.pts.map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ')}"/>`; });
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${sy(yr[0])}" y2="${sy(yr[1])}" stroke="${COL[v.c] || v.c}" stroke-width="2" stroke-dasharray="6 5"/>${v.label ? `<text x="${sx(v.x) + 6}" y="${sy(yr[1]) + 16}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  (o.dots || []).forEach(d => { s += `<circle cx="${sx(d[0])}" cy="${sy(d[1])}" r="7" fill="${COL[d[2]] || d[2]}" stroke="#fff" stroke-width="2"/>`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  if (o.ylab) s += `<text x="14" y="${H / 2}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" transform="rotate(-90 14 ${H / 2})" font-family="Calibri,Carlito,sans-serif">${o.ylab}</text>`;
+  return s + '</svg>';
+}
+function histSVG(groups, o = {}) { // groups: [{vals, c}] ; draws overlaid histograms
+  const W = o.w || 520, H = o.h || 220, P = 30, lo = o.lo, hi = o.hi, nb = o.bins || 28;
+  const bw = (hi - lo) / nb; let mx = 1; const hs = groups.map(g => { const h = Array(nb).fill(0); g.vals.forEach(v => { const i = Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / bw))); h[i]++; }); mx = Math.max(mx, ...h); return h; });
+  const sx = x => P + (x - lo) / (hi - lo) * (W - 2 * P);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><line x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/>`;
+  hs.forEach((h, gi) => h.forEach((c, i) => { if (!c) return; const hh = c / mx * (H - 2 * P); s += `<rect x="${sx(lo + i * bw) + 1}" y="${H - P - hh}" width="${(W - 2 * P) / nb - 2}" height="${hh}" fill="${COL[groups[gi].c] || groups[gi].c}" opacity="0.55" rx="2"/>`; }));
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${P / 2}" y2="${H - P}" stroke="${COL[v.c] || v.c}" stroke-width="3" ${v.dash ? 'stroke-dasharray="6 5"' : ''}/>${v.label ? `<text x="${sx(v.x) + 6}" y="${P / 2 + 12}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  return s + '</svg>';
+}
+
+const STM = { true: ["…", " '", "per", "ro", "'", " means", " '", "dog", "'", ".", " This", " statement", " is", ":"], false: ["…", " '", "per", "ro", "'", " means", " '", "house", "'", ".", " This", " statement", " is", ":"] };
+const BASE = { true: 0.72, false: -0.68 };
+const atanh = x => 0.5 * Math.log((1 + x) / (1 - x));
+function outScore(stmt, cond, strength) { const z = atanh(BASE[stmt]) + (cond === 'add' ? strength : cond === 'sub' ? -strength : 0); return Math.tanh(z); }
+function meter(val, ghost) {
+  const pos = v => 50 + v * 50;
+  return `<div class="mlab"><span>FALSE ← P(TRUE) − P(FALSE) → TRUE</span></div><div class="meter"><div class="z"></div>${ghost != null ? `<div class="n ghost" style="left:${pos(ghost)}%;background:${ghost > 0 ? COL.t : COL.f}"></div>` : ''}<div class="n" style="left:${pos(val)}%;background:${val > 0 ? COL.t : COL.f}"></div></div><div class="mlab"><span>−1</span><span>0</span><span>+1</span></div>`;
+}
+// ---------------- shared toy geometry ----------------
+const ALPHA = 42 * Math.PI / 180, MUF = [-1, 0], MUT = [1, 0], GAPV = [2, 0];
+const DMM = [1, 0], DLR = [Math.cos(ALPHA), Math.sin(ALPHA)];
+const SZ = { mm: 2, lr: 2 * Math.cos(ALPHA) };
+const TH = { mm: [SZ.mm * DMM[0], SZ.mm * DMM[1]], lr: [SZ.lr * DLR[0], SZ.lr * DLR[1]] };
+const CLOUD = (() => { const r = seededRand(14), P = []; for (let i = 0; i < 80; i++) { const lab = i % 2, a = gauss(r) * 0.75, b = gauss(r) * 0.22, c = lab ? MUT : MUF; P.push({ x: c[0] + a * 0.6 + b * 0.8, y: c[1] - a * 0.8 + b * 0.6, lab }); } return P; })();
+const PCOL = { mm: COL.p, lr: COL.a };
+// ---------------- Section 1: theta ----------------
+function rth(v, mode, k, el) {
+  const pts = CLOUD.map(p => ({ x: p.x, y: p.y, c: p.lab ? COL.t : COL.f, r: 5, o: v.fade ? 0.18 : 0.45 }));
+  const lines = [], marks = [];
+  if (v.centres) { marks.push({ x: MUF[0], y: MUF[1], c: 'f', label: 'μ_false' }); marks.push({ x: MUT[0], y: MUT[1], c: 't', label: 'μ_true' }); }
+  if (v.gap) lines.push({ x1: MUF[0], y1: MUF[1] - 0.06, x2: MUT[0], y2: MUT[1] - 0.06, c: 'ink', w: 3, arrow: 1, label: 'gap = μ_true − μ_false', dx: -150, dy: 26 });
+  if (v.dmm) lines.push({ x1: -3.2, y1: 0, x2: 3.2, y2: 0, c: '#D9CFF0', w: 2, dash: 1, clip: 1 });
+  if (v.dlr) lines.push({ x1: -2.4 * DLR[0], y1: -2.4 * DLR[1], x2: 2.4 * DLR[0], y2: 2.4 * DLR[1], c: '#F3E3C3', w: 2, dash: 1, clip: 1 });
+  if (v.mm) lines.push({ x1: MUF[0], y1: MUF[1] + 0.08, x2: MUF[0] + TH.mm[0], y2: MUF[1] + TH.mm[1] + 0.08, c: 'p', w: 6, arrow: 1, label: 'θ_MM', dx: -80, dy: 36 });
+  if (v.lr) { lines.push({ x1: MUF[0], y1: MUF[1], x2: MUF[0] + TH.lr[0], y2: MUF[1] + TH.lr[1], c: 'a', w: 6, arrow: 1, label: 'θ_LR', dx: 4, dy: -8 });
+    if (v.drop) lines.push({ x1: MUT[0], y1: MUT[1], x2: MUF[0] + TH.lr[0], y2: MUF[1] + TH.lr[1], c: 'a', w: 2, dash: 1 }); }
+  let h = '';
+  h += `<div class="row"><div class="col" style="flex:1 1 100%">${scatterSVG(pts, { xr: [-2.3, 2.3], yr: [-1.8, 1.8], w: 760, h: 595, lines, marks, axes: false })}</div><div class="col">`;
+  if (v.tab) h += `<table class="grid" style="font-size:1.05rem"><tr><th></th><th>d̂</th><th>size</th><th>θ</th></tr><tr><th style="color:${COL.p}">MM</th><td>along gap</td><td>2.0</td><td style="background:var(--purple-lt)">full gap</td></tr><tr><th style="color:${COL.a}">LR</th><td>tilted 42°</td><td>1.49</td><td style="background:var(--amber-lt)">shorter, sideways</td></tr></table>`;
+  if (v.eq) h += `<div class="card" style="margin-top:10px">${v.eq}</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`;
+  el.innerHTML = h + `</div></div><div class="illus">Toy picture: 2 of 5120 dims at layer 14. Clouds are stretched along a noise direction — that is why LR tilts.</div>`;
+}
+Stepper('sth', { render: rth, intuition: [
+  { say: 'The notebook trains the probes for this experiment on cities + neg_cities (statements AND their negations — a cleaner truth direction). Teal = true, red = false.', v: { centres: 1 } },
+  { say: 'One shared ingredient: the GAP between the class centres, μ_true − μ_false. Both θs are built from it.', v: { centres: 1, gap: 1 } },
+  { say: 'MM: its direction d̂_MM IS the gap, made length 1. How big a step? The gap measured along d̂_MM = the whole gap, 2.0. So θ_MM = the gap arrow itself.', v: { centres: 1, dmm: 1, mm: 1, eq: 'θ_MM = (gap · d̂_MM) × d̂_MM = 2.0 × d̂_MM' } },
+  { say: 'LR: its direction d̂_LR is tilted (it leans to cancel the stretched noise). Same recipe: measure the gap ALONG d̂_LR — its shadow — 2.0 × cos 42° = 1.49.', v: { centres: 1, dlr: 1, lr: 1, drop: 1, gap: 1, eq: 'θ_LR = (gap · d̂_LR) × d̂_LR = 1.49 × d̂_LR<br>dashed = the gap’s shadow on the LR line' } },
+  { say: 'Side by side: θ_MM goes straight from the false centre to the true centre. θ_LR is shorter and points partly sideways — into the noise direction.', v: { centres: 1, mm: 1, lr: 1, drop: 1, tab: 1, good: 1, note: 'Same recipe, same gap — different vectors. Section 2: what happens when we ADD them.' } } ],
+  code: { file: 'notebook · building θ for both probes', lines: ['combined_acts = t.cat([activations["cities"], neg_cities_acts])', 'mm = MMProbe.from_data(combined_acts, combined_labels)', 'lr = LRProbe.from_data(combined_acts, combined_labels)', 'true_mean, false_mean = acts[labels==1].mean(0), acts[labels==0].mean(0)', 'd_hat = probe.direction / probe.direction.norm()        # for MM, then LR', 'projection_diff = ((true_mean - false_mean) @ d_hat).item()', 'scaled_direction = projection_diff * d_hat              # = θ'],
+    steps: [{ a: [0, 1, 2], say: 'Both probes, same training data.', v: { centres: 1 } }, { a: [3], say: 'The class centres.', v: { centres: 1, gap: 1 } }, { a: [4, 5, 6], say: 'Unit direction × the gap’s shadow on it. For MM this is the full gap; for LR a shorter, tilted vector.', v: { centres: 1, mm: 1, lr: 1, drop: 1, tab: 1 } }] } });
+
+// ---------------- Section 2: add theta to one statement ----------------
+let spP = 'mm', spW = 'f', spA = 0;
+function rpush(v, mode, k, el) {
+  if (v.p) spP = v.p; if (v.w) spW = v.w; if (v.a != null) spA = v.a;
+  const start = spW === 'f' ? [-1.15, 0.35] : [1.1, -0.3], sign = spW === 'f' ? 1 : -1, th = TH[spP];
+  const end = [start[0] + sign * spA * th[0], start[1] + sign * spA * th[1]];
+  const pts = CLOUD.map(p => ({ x: p.x, y: p.y, c: p.lab ? COL.t : COL.f, r: 5, o: 0.3 }));
+  pts.push({ x: end[0], y: end[1], c: spW === 'f' ? COL.f : COL.t, r: 11, o: 1, s: '#1A1A1A' });
+  const lines = [{ x1: 0, y1: -2.3, x2: 0, y2: 2.3, c: 'g', w: 2, dash: 1 }];
+  if (v.read) lines.push({ x1: -2.5, y1: -1.9, x2: 2.5, y2: -1.9, c: 'ink', w: 3, arrow: 1, label: 'what later layers read', dx: -190, dy: -10 });
+  if (spA > 0) lines.push({ x1: start[0], y1: start[1], x2: end[0], y2: end[1], c: spP === 'mm' ? 'p' : 'a', w: 5, arrow: 1, label: (sign > 0 ? '+' : '−') + 'θ_' + spP.toUpperCase(), dy: -10 });
+  if (v.read && spA > 0) lines.push({ x1: end[0], y1: end[1], x2: end[0], y2: -1.9, c: spP === 'mm' ? 'p' : 'a', w: 2, dash: 1 });
+  const val = Math.tanh(0.9 * end[0]), base = Math.tanh(0.9 * start[0]);
+  let h = `<div class="ctrl"><label>θ from:</label><div class="seg purple" id="cpP">${['mm', 'lr'].map(q => `<button data-p="${q}" class="${spP === q ? 'on' : ''}">${q.toUpperCase()}</button>`).join('')}</div><label style="margin-left:12px">statement:</label><div class="seg" id="cpW"><button data-w="f" class="${spW === 'f' ? 'on' : ''}">false + θ</button><button data-w="t" class="${spW === 't' ? 'on' : ''}">true − θ</button></div>`;
+  if (v.slide) h += `<label style="margin-left:12px">amount:</label><input type="range" min="0" max="1.5" step="0.05" value="${spA}" class="slider" id="cpA" style="max-width:200px"><span class="big" style="font-size:1.3rem">${spA.toFixed(2)}×</span>`;
+  h += `</div><div class="row"><div class="col" style="max-width:780px;flex:2.2">${scatterSVG(pts, { xr: [-2.6, 2.6], yr: [-2.2, 2.2], w: 760, h: 576, lines, axes: false, texts: [{ x: -2.5, y: 1.9, t: 'FALSE side', c: 'f', size: 18 }, { x: 1.4, y: 1.9, t: 'TRUE side', c: 't', size: 18 }] })}</div><div class="col">`;
+  h += `<div class="lbl">what the model answers</div>${meter(val, spA > 0 ? base : null)}`;
+  if (spA > 0) h += `<div class="stat" style="margin-top:10px"><div class="k">moved toward the ${sign > 0 ? 'TRUE' : 'FALSE'} side by</div><div class="v">${Math.abs(end[0] - start[0]).toFixed(2)}</div></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}" style="margin-top:10px">${v.note}</div>`;
+  el.innerHTML = h + `</div></div><div class="illus">Toy assumption: later layers read truth left ↔ right. The real experiment (Sections 3–4) measures this instead of assuming it.</div>`;
+  el.querySelectorAll('#cpP button').forEach(b => b.onclick = () => { spP = b.dataset.p; rpush({ ...v, p: spP, note: null }, mode, k, el); });
+  el.querySelectorAll('#cpW button').forEach(b => b.onclick = () => { spW = b.dataset.w; rpush({ ...v, w: spW, note: null }, mode, k, el); });
+  const sl = el.querySelector('#cpA'); if (sl) sl.oninput = e => { spA = +e.target.value; rpush({ ...v, a: spA, note: null }, mode, k, el); };
+}
+Stepper('spush', { render: rpush, intuition: [
+  { say: 'One FALSE statement’s activation (black ring) sits on the false side. The model answers FALSE.', v: { p: 'mm', w: 'f', a: 0 } },
+  { say: 'Intervention = vector addition: new activation = old activation + θ. Add θ_MM: the point moves by the whole gap — onto the true side. Dashed drop = how far it moved along what later layers read: the whole push counts.', v: { p: 'mm', w: 'f', a: 1, read: 1, good: 1, note: 'If the model really reads this direction, its answer must flip to TRUE. Ghost marker = answer before.' } },
+  { say: 'Now add θ_LR instead. Shorter, and partly sideways. Only its shadow on the reading axis counts — the sideways part is wasted.', v: { p: 'lr', w: 'f', a: 1, read: 1, bad: 1, note: 'Smaller push along what the model reads → smaller change in the answer.' } },
+  { say: 'The mirror test: a TRUE statement MINUS θ should flip to FALSE. Compare MM and LR with the buttons.', v: { p: 'mm', w: 't', a: 1, read: 1 } },
+  { say: 'Your turn: probe, statement and amount.', v: { p: 'mm', w: 'f', a: 0.5, read: 1, slide: 1 } } ] });
+
+
+let edOp='add';
+function redit(v, mode, k, el) {
+  if (v.op) edOp = v.op;
+  const th = TH.mm, n = Math.hypot(th[0], th[1]), u = [th[0] / n, th[1] / n];
+  const start = edOp === 'sub' ? [1.1, -0.3] : [-1.15, 0.35];
+  let end;
+  if (edOp === 'add') end = [start[0] + th[0], start[1] + th[1]];
+  else if (edOp === 'sub') end = [start[0] - th[0], start[1] - th[1]];
+  else { const r = start[0] * u[0] + start[1] * u[1]; end = [start[0] - r * u[0], start[1] - r * u[1]]; }
+  const pts = CLOUD.map(p => ({ x: p.x, y: p.y, c: p.lab ? COL.t : COL.f, r: 5, o: 0.3 }));
+  pts.push({ x: start[0], y: start[1], c: edOp === 'sub' ? COL.t : COL.f, r: 9, o: 0.5 });
+  pts.push({ x: end[0], y: end[1], c: COL.p, r: 12, o: 1, s: '#1A1A1A' });
+  const lines = [{ x1: 0, y1: -2.3, x2: 0, y2: 2.3, c: 'g', w: 2, dash: 1 },
+    { x1: start[0], y1: start[1], x2: end[0], y2: end[1], c: 'p', w: 5, arrow: 1, label: edOp === 'add' ? '+θ' : edOp === 'sub' ? '−θ' : 'remove θ', dy: -12 }];
+  const val = Math.tanh(0.9 * end[0]), base = Math.tanh(0.9 * start[0]);
+  const desc = { add: 'new = old + θ', sub: 'new = old − θ', rem: 'new = old − (old · θ̂) θ̂   (its reading along θ set to the midpoint)' }[edOp];
+  let h = `<div class="ctrl"><label>Edit:</label><div class="seg purple" id="edB">${[['add', 'add θ (false stmt)'], ['sub', 'subtract θ (true stmt)'], ['rem', 'remove θ (bonus)']].map(([q, l]) => `<button data-o="${q}" class="${edOp === q ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
+  h += `<div class="row"><div class="col" style="max-width:780px;flex:2.2">${scatterSVG(pts, { xr: [-2.6, 2.6], yr: [-2.2, 2.2], w: 760, h: 576, lines, axes: false, texts: [{ x: -2.5, y: 1.9, t: 'FALSE side', c: 'f', size: 18 }, { x: 1.4, y: 1.9, t: 'TRUE side', c: 't', size: 18 }] })}</div><div class="col">`;
+  h += `<div class="lbl">what the model answers (faded = before)</div>${meter(val, base)}`;
+  h += `<div class="stat" style="margin-top:10px"><div class="k">the edit</div><div class="v" style="font-size:1.1rem">${desc}</div></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`;
+  el.innerHTML = h + `</div></div><div class="illus">The notebook runs add and subtract (intervention = "add" / "subtract"). Remove = directional ablation — a common extra test, not in this notebook.</div>`;
+  el.querySelectorAll('#edB button').forEach(b => b.onclick = () => { edOp = b.dataset.o; redit({ op: edOp }, mode, k, el); });
+}
+Stepper('sedit', { render: redit, intuition: [
+  { say: 'ADD θ to a FALSE statement: it jumps the whole gap into the TRUE cluster.', v: { op: 'add', good: 1, note: 'If later blocks read along θ → the answer moves to TRUE.' } },
+  { say: 'SUBTRACT θ from a TRUE statement: it jumps into the FALSE cluster.', v: { op: 'sub', good: 1, note: 'If the model uses θ → the answer moves to FALSE.' } },
+  { say: 'REMOVE θ (bonus): keep everything else, but delete the part along θ — the statement lands on the midpoint line.', v: { op: 'rem', good: 1, note: 'Truth signal wiped → if the model relies on θ, it becomes unsure (≈ 0). Used e.g. in the refusal-direction paper.' } },
+  { say: 'Your turn — switch between the three edits.', v: {} } ] });
+
+let s1stmt = 'false', s1cond = 'none';
+function r1(v, mode, k, el) {
+  if (v.stmt) s1stmt = v.stmt; if (v.cond) s1cond = v.cond;
+  const toks = STM[s1stmt], periodIdx = 9, thisIdx = 10;
+  let h = `<div class="ctrl"><label>Statement:</label><div class="seg" id="c1s"><button data-s="true" class="${s1stmt === 'true' ? 'on' : ''}">true: ‘perro’ = ‘dog’</button><button data-s="false" class="${s1stmt === 'false' ? 'on' : ''}">false: ‘perro’ = ‘house’</button></div>`;
+  if (v.ctrl) h += `<label style="margin-left:14px">Intervention:</label><div class="seg purple" id="c1c">${['none', 'add', 'sub'].map(c => `<button data-c="${c}" class="${s1cond === c ? 'on' : ''}">${c === 'sub' ? 'subtract' : c}</button>`).join('')}</div>`;
+  h += `</div>`;
+  if (v.prompt) h += `<div class="prompt"><div class="ex">The Spanish word 'jirafa' means 'giraffe'. This statement is: TRUE<br>The Spanish word 'escribir' means 'to write'. This statement is: TRUE<br>The Spanish word 'gato' means 'cat'. This statement is: TRUE<br>The Spanish word 'aire' means 'silver'. This statement is: FALSE</div><b>The Spanish word 'perro' means '${s1stmt === 'true' ? 'dog' : 'house'}'. This statement is:</b> <span class="chip p">next token?</span></div>`;
+  if (v.toks) { h += `<div class="lbl" style="margin-top:12px">end of the query, as tokens${v.pad ? ' (+ right padding from the batch)' : ''}</div><div class="tokrow">`;
+    const all = v.pad ? toks.concat(['PAD', 'PAD', 'PAD']) : toks;
+    all.forEach((t, i) => { let c = t === 'PAD' ? 'tok pad' : 'tok'; if (v.pos && (i === periodIdx || i === thisIdx)) c += ' pu'; if (v.last && i === toks.length - 1) c += ' hi';
+      h += `<div style="text-align:center"><div class="${c}">${t}</div>${v.idx ? `<div class="mono" style="font-size:0.72rem;color:var(--muted)">${i === periodIdx ? 'end−len_suffix−1' : i === thisIdx ? 'end−len_suffix' : i === toks.length ? '← end' : ''}</div>` : ''}</div>`; });
+    h += `</div>`; }
+  const cond = v.ctrl ? s1cond : 'none', val = outScore(s1stmt, cond, 1.45), base = BASE[s1stmt];
+  if (v.meter) { h += `<div class="row" style="margin-top:12px"><div class="col">${meter(val, cond !== 'none' ? base : null)}`;
+    if (cond !== 'none') h += `<div class="status ${Math.sign(val) !== Math.sign(base) ? 'good' : ''}" style="margin-top:10px">NIE = score(${cond === 'sub' ? 'subtract' : 'add'}) − score(none) = <b>${(val - base >= 0 ? '+' : '') + (val - base).toFixed(2)}</b>${Math.sign(val) !== Math.sign(base) ? ' — the answer flipped.' : ''}</div>`;
+    h += `</div>`;
+    if (v.grid) { const cols = 6, first = 7; let g = `<div class="lbl">where we add the vector: layers × last positions</div><div style="display:flex;gap:8px"><div style="position:relative;width:30px;height:${40 * 7}px;font-size:0.7rem;color:var(--muted);font-family:'Courier New',monospace">${[0, 8, 14, 39].map(L => `<span style="position:absolute;top:${L * 7 - 4}px;right:0">L${L}</span>`).join('')}</div><div class="lgrid" style="grid-template-columns:repeat(${cols},46px)">`;
+      for (let L = 0; L < 40; L++) for (let c = 0; c < cols; c++) { const pi = first + c; const on = L >= 8 && L <= 14 && (pi === periodIdx || pi === thisIdx) && (cond !== 'none' || v.pos); g += `<div class="${on ? 'on' : ''}"></div>`; }
+      g += `</div></div><div style="display:grid;grid-template-columns:repeat(${cols},46px);gap:1px;margin-left:38px;margin-top:4px;font-family:'Courier New',monospace;font-size:0.72rem;color:var(--muted)">${toks.slice(first, first + cols).map(t => `<div style="text-align:center;overflow:hidden">${t.trim() || '␣'}</div>`).join('')}</div>`;
+      h += `<div class="col" style="max-width:360px">${g}</div>`; }
+    h += `</div>`; }
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}">${v.note}</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('#c1s button').forEach(b => b.onclick = () => { s1stmt = b.dataset.s; r1({ ...v, stmt: s1stmt }, mode, k, el); });
+  el.querySelectorAll('#c1c button').forEach(b => b.onclick = () => { s1cond = b.dataset.c; r1({ ...v, cond: s1cond }, mode, k, el); });
+}
+Stepper('s1', {
+  render: r1,
+  intuition: [
+    { say: 'Now the real thing on Llama-2-13B. We can’t see the model’s answer as a dot on a plot — so we ASK it, with a prompt.', ex: 'A thermometer reads temperature. Heating the thermometer does not heat the room — so we push, then check the answer.', v: { stmt: 'false', prompt: 1 } },
+    { say: 'The task: a few-shot prompt (3 TRUE, 1 FALSE examples), then a new statement and “This statement is:”. The model must say TRUE or FALSE.', v: { stmt: 'false', prompt: 1, toks: 1 } },
+    { say: 'The readout: at the last token, P(TRUE) − P(FALSE). Positive = model says true. Baseline: the model gets >90% right.', v: { stmt: 'false', prompt: 1, toks: 1, last: 1, meter: 1 } },
+    { say: 'WHERE we push: only the statement’s final “.” and the word “This” — the tokens where the truth judgement sits.', v: { stmt: 'false', toks: 1, pos: 1, meter: 1, grid: 1 } },
+    { say: '…and only at layers 8 → 14: after truth is computed, up to the probe layer. Nothing else is touched.', ex: 'The paper found these hidden states (“group b”) are the causally implicated ones.', v: { stmt: 'false', toks: 1, pos: 1, meter: 1, grid: 1 } },
+    { say: 'False statement + ADD θ at those 2 tokens × 7 layers → the meter swings toward TRUE.', v: { stmt: 'false', cond: 'add', ctrl: 1, toks: 1, pos: 1, meter: 1, grid: 1 } },
+    { say: 'True statement − θ → swings toward FALSE. The direction is causally implicated, not just correlated.', v: { stmt: 'true', cond: 'sub', ctrl: 1, toks: 1, pos: 1, meter: 1, grid: 1, good: 1, note: 'How far the meter moved = the effect. Section 4 averages it over every statement.' } },
+    { say: 'Your turn: pick any statement and intervention above.', v: { ctrl: 1, toks: 1, pos: 1, meter: 1, grid: 1 } },
+  ],
+  code: { file: 'pseudocode · batch-aware intervention hook', lines: [
+    'len_suffix = len(tokenizer.encode(" This statement is:"))',
+    'def hook_fn(module, input, output):',
+    '    h = output[0] if isinstance(output, tuple) else output',
+    '    for b in range(h.shape[0]):',
+    '        end = attn_mask[b].sum()                   # real length of row b',
+    '        for pos in [end - len_suffix - 1, end - len_suffix]:',
+    '            h[b, pos, :] += sign * v               # sign = +1 add, −1 subtract',
+    '    return (h,) + output[1:] if isinstance(output, tuple) else h',
+    'handles = [model.model.layers[L].register_forward_hook(hook_fn) for L in 8..14]',
+    'try: out = model(**inputs)   finally: remove every handle'],
+    steps: [
+      { a: [0], say: 'Count the suffix tokens once. Sanity-check by DECODING the two target positions — BOS in encode() can shift you by one.', v: { stmt: 'false', toks: 1, pos: 1, idx: 1 } },
+      { a: [1, 2], say: 'HF decoder layers may return a tuple (hidden, extras…). Unwrap, edit, re-wrap in the same format.', v: { stmt: 'false', toks: 1, pos: 1 } },
+      { a: [3, 4], say: 'Padding again! Each row ends at a different place, so compute end per row from the attention mask — never use −1.', v: { stmt: 'false', toks: 1, pos: 1, idx: 1, pad: 1 } },
+      { a: [5, 6], say: 'The two target positions: the period and “This”. Add ±v in place.', v: { stmt: 'false', cond: 'add', ctrl: 1, toks: 1, pos: 1, idx: 1, pad: 1, meter: 1 } },
+      { a: [8, 9], say: 'Register on layers 8–14 and ALWAYS remove in finally. A stuck hook silently corrupts every later run.', v: { stmt: 'false', cond: 'add', ctrl: 1, toks: 1, pos: 1, meter: 1, grid: 1 } },
+    ] },
+});
+
+// ---------------- Section 4: measuring ----------------
+const RES = { mm: { none: { t: 0.62, f: -0.55 }, add: { t: 0.71, f: 0.38 }, subtract: { t: -0.41, f: -0.66 } }, lr: { none: { t: 0.62, f: -0.55 }, add: { t: 0.66, f: -0.21 }, subtract: { t: 0.18, f: -0.61 } } };
+let snP = 'mm';
+function barsSVG(groups, o) { const W = o.w || 520, H = o.h || 300, P = 46, lo = o.lo, hi = o.hi, sy = y => P / 2 + (hi - y) / (hi - lo) * (H - P - P / 2), gw = (W - P - 10) / groups.length, bw = Math.min(56, gw / (groups[0].bars.length + 1));
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px">`;
+  (o.ticks || []).forEach(t => s += `<line x1="${P}" x2="${W - 10}" y1="${sy(t)}" y2="${sy(t)}" stroke="${t === 0 ? '#1A1A1A' : '#EEF0F2'}" ${t === 0 ? 'stroke-dasharray="6 5"' : ''}/><text x="${P - 6}" y="${sy(t) + 5}" font-size="16" text-anchor="end" fill="#7A858E">${t}</text>`);
+  groups.forEach((g, gi) => { const x0 = P + gi * gw + (gw - bw * g.bars.length) / 2;
+    g.bars.forEach((b, bi) => { const y = sy(Math.max(0, b.v)), hh = Math.abs(sy(b.v) - sy(0)); s += `<rect x="${x0 + bi * bw + 2}" y="${y}" width="${bw - 4}" height="${hh}" fill="${b.c}" opacity="${b.dim ? 0.25 : 0.9}" rx="3" ${b.ring ? 'stroke="#1A1A1A" stroke-width="3"' : ''}/><text x="${x0 + bi * bw + bw / 2}" y="${b.v >= 0 ? y - 6 : y + hh + 18}" font-size="15" text-anchor="middle" font-weight="bold" fill="${b.dim ? '#B0B8BE' : '#1A1A1A'}">${(b.v >= 0 ? '+' : '') + b.v.toFixed(2)}</text>`; });
+    s += `<text x="${P + gi * gw + gw / 2}" y="${H - 10}" font-size="18" text-anchor="middle" font-weight="bold" fill="#4F5A63">${g.name}</text>`; });
+  return s + '</svg>'; }
+function rnie(v, mode, k, el) { if (v.p) snP = v.p;
+  const R = RES[snP], conds = v.all ? ['none', 'add', 'subtract'] : ['none'];
+  let h = '';
+  if (v.toggle) h += `<div class="ctrl"><label>θ from:</label><div class="seg purple" id="cnP">${['mm', 'lr'].map(q => `<button data-p="${q}" class="${snP === q ? 'on' : ''}">${q.toUpperCase()}</button>`).join('')}</div></div>`;
+  h += `<div class="row"><div class="col" style="max-width:560px">`;
+  if (!v.nie) { h += `<div class="lbl">mean P(TRUE) − P(FALSE) · θ from ${snP.toUpperCase()}</div>` + barsSVG(conds.map(c => ({ name: c, bars: [{ v: R[c].t, c: COL.t, dim: v.focus && c !== 'subtract', ring: v.focus && c === 'subtract' }, { v: R[c].f, c: COL.f, dim: v.focus && c !== 'add', ring: v.focus && c === 'add' }] })), { lo: -1, hi: 1, ticks: [-1, -0.5, 0, 0.5, 1] }) + `<div><span class="chip t">true statements</span><span class="chip f">false statements</span></div>`; }
+  else { const n = q => ({ f: RES[q].add.f - RES[q].none.f, t: RES[q].subtract.t - RES[q].none.t });
+    h += `<div class="lbl">NIE (change from “none”)</div>` + barsSVG([{ name: 'add → false', bars: [{ v: n('mm').f, c: COL.p }, { v: n('lr').f, c: COL.a }] }, { name: 'subtract → true', bars: [{ v: n('mm').t, c: COL.p }, { v: n('lr').t, c: COL.a }] }], { lo: -1.2, hi: 1.2, ticks: [-1, -0.5, 0, 0.5, 1] }) + `<div><span class="chip p">MM</span><span class="chip a">LR</span></div>`; }
+  h += `</div><div class="col">`;
+  if (v.table) { h += `<table class="grid" style="font-size:1.05rem"><tr><th>intervention</th><th style="color:${COL.t}">true stmts</th><th style="color:${COL.f}">false stmts</th></tr>`; conds.forEach(c => h += `<tr><th>${c}</th><td style="${v.focus && c === 'subtract' ? 'outline:3px solid #1A1A1A' : ''}">${R[c].t.toFixed(2)}</td><td style="${v.focus && c === 'add' ? 'outline:3px solid #1A1A1A' : ''}">${R[c].f.toFixed(2)}</td></tr>`); h += `</table>`; }
+  if (v.eq) h += `<div class="card" style="margin-top:10px">${v.eq}</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`;
+  el.innerHTML = h + `</div></div><div class="illus">Illustrative numbers with the notebook’s shape. Your run prints the real table and bar charts.</div>`;
+  el.querySelectorAll('#cnP button').forEach(b => b.onclick = () => { snP = b.dataset.p; rnie({ ...v, p: snP, note: null }, mode, k, el); }); }
+Stepper('snie', { render: rnie, intuition: [
+  { say: 'One number per statement: P(TRUE) − P(FALSE) at the last token. Average it over every TRUE Spanish statement, and over every FALSE one (the prompt’s own 4 examples are left out). With no intervention: true ≈ +, false ≈ −. The model can do the task.', v: { p: 'mm', table: 1 } },
+  { say: 'Run three times — none, add θ, subtract θ — on both subsets: 3 × 2 = 6 averages. This is the notebook’s table and grouped bar chart (θ from MM).', v: { p: 'mm', all: 1, table: 1 } },
+  { say: 'Only two of the six answer our question: ADD on FALSE statements (should rise toward TRUE) and SUBTRACT on TRUE statements (should fall toward FALSE).', v: { p: 'mm', all: 1, table: 1, focus: 1, eq: 'NIE_false = P_diff(add, false) − P_diff(none, false)<br>NIE_true = P_diff(subtract, true) − P_diff(none, true)' } },
+  { say: 'Repeat everything with θ_LR (toggle). Same prompts, same layers, same tokens — only θ changes.', v: { p: 'lr', all: 1, table: 1, focus: 1, toggle: 1 } },
+  { say: 'Compare the NIEs. MM moves the model much more in both tests — even though LR classified at least as well.', v: { nie: 1, good: 1, note: 'Paper: MM beats LR in 7 of 8 conditions. High probe accuracy ≠ the direction the model uses. Always intervene.' } },
+  { say: 'Why (Section 2): θ_LR is shorter and partly sideways; only its part along what the model reads counts. Same lesson as SAEs: encoder vectors are for DETECTING, decoder vectors for STEERING.', v: { nie: 1 } } ],
+  code: { file: 'notebook · measuring the effect', lines: ['for intervention_type in ["none", "add", "subtract"]:', '    for subset in ["true", "false"]:', '        p_diffs = intervention_experiment(subset_stmts, ..., scaled_direction, ..., intervention=intervention_type)', '        results[(intervention_type, subset)] = p_diffs.mean().item()', 'mm_nie_false = results[("add", "false")] - results[("none", "false")]', 'mm_nie_true  = results[("subtract", "true")] - results[("none", "true")]', '# same again with lr_scaled_direction → lr_nie_false, lr_nie_true'],
+    steps: [{ a: [0, 1, 2, 3], say: '6 runs, each averaged over its subset.', v: { p: 'mm', all: 1, table: 1 } }, { a: [4, 5], say: 'NIE = change from the un-touched run.', v: { p: 'mm', all: 1, table: 1, focus: 1 } }, { a: [6], say: 'Then the side-by-side MM vs LR bar chart.', v: { nie: 1 } }] } });
+</script></body></html>

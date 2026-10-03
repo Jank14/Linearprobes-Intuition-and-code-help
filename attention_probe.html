@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attention probes — TARA</title>
+<style>:root { --teal:#0E7C7B; --teal-lt:#DCEEED; --coral:#E4572E; --coral-lt:#FBE4DC; --purple:#6C4AB6; --purple-lt:#EAE3F7; --amber:#B7791F; --amber-lt:#FDF1D6; --ink:#1A1A1A; --muted:#4F5A63; --line:#C9D0D5; --bg:#F2F4F5; --code:#1E1E2E; }
+* { box-sizing:border-box; }
+html { font-size:20px; }
+@media (min-width:1600px) { html { font-size:22px; } }
+body { font-family:Calibri, Carlito, "Segoe UI", Arial, sans-serif; margin:0; padding:28px 40px 60px; background:#fff; color:var(--ink); line-height:1.35; }
+.wrap { max-width:1720px; margin:0 auto; }
+h1 { font-size:2.1rem; margin:0; }
+.sub { color:var(--muted); font-size:1.1rem; margin:6px 0 22px; }
+.kicker { font-size:0.85rem; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:var(--teal); }
+h2 { font-size:1.45rem; margin:0 0 6px; }
+.panel { border:2px solid var(--line); border-radius:18px; padding:24px 28px; margin-bottom:26px; }
+.desc { color:var(--muted); font-size:1.05rem; margin:0 0 18px; max-width:1300px; }
+code, .mono { font-family:"Courier New", "DejaVu Sans Mono", monospace; }
+button { font-family:inherit; font-size:1rem; font-weight:bold; padding:12px 20px; border-radius:12px; border:2px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+button:hover { border-color:var(--teal); }
+button.primary { background:var(--teal); border-color:var(--teal); color:#fff; }
+button:disabled { opacity:0.35; cursor:not-allowed; }
+.seg { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; flex-wrap:wrap; }
+.seg button { border:none; border-radius:0; color:var(--muted); }
+.seg button + button { border-left:2px solid var(--line); }
+.seg button.on { background:var(--teal); color:#fff; }
+.seg.coral button.on { background:var(--coral); }
+.seg.purple button.on { background:var(--purple); }
+.row { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+.col { flex:1; min-width:360px; }
+.ctrl { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.ctrl label { font-weight:bold; color:var(--muted); }
+/* code + pseudocode pair: each row = [code | plain English] */
+.codepair { display:grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); border-radius:14px; overflow:hidden; border:2px solid var(--code); }
+.codepair .c { background:var(--code); color:#E4E4EF; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.95rem; }
+.codepair .p { background:#FAFBFC; font-size:1rem; }
+.codepair .hd { font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; font-weight:bold; padding:14px 18px 8px; color:#9A9AB0; font-family:Calibri, Carlito, sans-serif; }
+.codepair .hd.p { color:var(--muted); }
+.codepair .pad { height:12px; }
+.ln { padding:4px 18px; border-left:6px solid transparent; transition:background .25s, opacity .25s; }
+.ln.c { white-space:pre-wrap; word-break:break-word; }
+.ln.c.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.ln.p.on { background:var(--teal-lt); border-left-color:var(--teal); font-weight:bold; }
+.ln.c.done { color:#8C8CA6; } .ln.c.done span { color:inherit; } .ln.p.done { color:#8A949C; }
+.kw{color:#D19BE0;} .str{color:#F0A77F;} .com{color:#7FBF7F;} .num{color:#B5CEA8;}
+/* flow diagram */
+.flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; row-gap:14px; }
+.node { border:3px solid var(--line); background:var(--bg); border-radius:14px; padding:10px 14px; min-width:120px; text-align:center; transition:all .3s; }
+.node .t { font-weight:bold; font-size:1.05rem; }
+.node .h { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); margin-top:4px; }
+.node.on { border-color:var(--teal); background:var(--teal-lt); box-shadow:0 0 0 5px rgba(14,124,123,.18); }
+.node.bad { border-color:var(--coral); background:var(--coral-lt); }
+.node.dim { opacity:.35; }
+.arr { align-self:center; font-size:1.6rem; color:var(--muted); padding:0 8px; }
+.status { margin-top:16px; padding:14px 18px; border-radius:12px; background:var(--bg); font-size:1.1rem; min-height:56px; }
+.status.good { background:var(--teal-lt); color:#0a5e5d; }
+.status.bad { background:var(--coral-lt); color:#a53a1b; }
+.note { background:var(--amber-lt); border-radius:12px; padding:14px 18px; font-size:1rem; margin-top:10px; }
+.hgrid { display:inline-grid; gap:3px; }
+.hcell { border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:#fff; font-family:"Courier New",monospace; }
+.axis { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+.big { font-size:2.4rem; font-weight:bold; font-family:"Courier New",monospace; }
+.pill { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.9rem; }
+.keys { animation:kfade .8s 6s forwards; position:fixed; right:18px; bottom:14px; font-size:0.8rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+.vec { display:inline-grid; grid-template-columns:repeat(6,18px); gap:2px; vertical-align:middle; }
+.vec div { width:18px; height:18px; border-radius:3px; }
+/* stepper */
+.stepper { border:2px solid var(--line); border-radius:18px; padding:18px 22px; margin:14px 0 26px; background:#fff; }
+.st-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.st-head .st-count { color:var(--muted); margin-left:6px; }
+.st-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr); gap:22px; align-items:start; }
+@media (max-width:1100px) { .st-body { grid-template-columns:1fr; } }
+.st-vis { min-height:380px; }
+.st-say { background:var(--teal-lt); color:#0a5e5d; font-weight:bold; font-size:1.2rem; border-radius:14px; padding:16px 18px; line-height:1.4; }
+.st-ex { margin-top:12px; background:var(--amber-lt); border-radius:14px; padding:12px 16px; font-size:1.02rem; }
+.st-ex b { display:block; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--amber); margin-bottom:4px; }
+.st-code { margin-top:12px; background:var(--code); border-radius:14px; padding:10px 0 12px; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.9rem; color:#E4E4EF; }
+.st-code .hd { font-family:Calibri,Carlito,sans-serif; font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#9A9AB0; font-weight:bold; padding:4px 16px 8px; }
+.st-code .l { padding:4px 16px; white-space:pre-wrap; border-left:6px solid transparent; }
+.st-code .l.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.st-code .l.future { color:#6A6A84; } .st-code .l.future span { color:inherit !important; }
+.vn { display:inline-grid; gap:3px; }
+.vn div { border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:"Courier New",monospace; font-weight:bold; font-size:0.82rem; border:1px solid #E1E5E8; }
+.bars { display:flex; gap:10px; align-items:flex-end; }
+.bars .b { text-align:center; width:52px; }
+.bars .bt { display:flex; align-items:flex-end; justify-content:center; }
+.bars .bf { width:36px; border-radius:6px 6px 0 0; transition:height .4s; }
+.bars .bv { font-size:0.75rem; color:var(--muted); height:20px; }
+.bars .bl { font-weight:bold; font-family:"Courier New",monospace; margin-top:4px; }
+.vbox { border:3px solid var(--line); border-radius:14px; padding:10px 12px; background:#fff; display:inline-block; vertical-align:top; transition:all .3s; }
+.vbox .vt { font-size:0.8rem; font-weight:bold; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+.vbox.on { border-color:var(--teal); box-shadow:0 0 0 5px rgba(14,124,123,.15); }
+.vbox.dim { opacity:.28; }
+.varr { display:inline-flex; align-items:center; font-size:1.8rem; color:var(--muted); padding:0 6px; align-self:center; }
+.vrow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; row-gap:12px; }
+.picker { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+.picker button { border:none; border-radius:0; width:54px; font-family:"Courier New",monospace; font-size:1.2rem; padding:10px 0; }
+.picker button + button { border-left:2px solid var(--line); }
+.picker button.on { background:var(--purple); color:#fff; }
+.tokrow2 { display:flex; gap:10px; flex-wrap:wrap; }
+.tk2 { min-width:70px; padding:12px 10px; text-align:center; border:3px solid var(--line); border-radius:12px; font-weight:bold; font-size:1.3rem; background:#fff; transition:all .3s; }
+.tk2 small { display:block; font-weight:normal; font-size:0.7rem; color:var(--muted); font-family:"Courier New",monospace; }
+.legend { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+/* presenter bar */
+.pbar { position:sticky; top:0; z-index:50; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.96); padding:10px 0 12px; margin:-6px 0 12px; border-bottom:2px solid var(--line); }
+.pbar button { padding:8px 14px; font-size:0.9rem; border-radius:10px; }
+.pbar button.sec b { color:var(--teal); margin-right:4px; }
+.pbar button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+.pbar button.on b { color:#fff; }
+.pbar .sp { flex:1; }
+.st-head { position:relative; }
+
+sub { font-size:0.62em; color:inherit; opacity:.75; margin-left:1px; }
+.stepper { scroll-margin-top:84px; }
+
+
+.scat { background:#fff; border:2px solid var(--line); border-radius:14px; }
+.lbl { font-size:0.8rem; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:4px 0 6px; }
+.chip { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.85rem; margin:2px 4px 2px 0; }
+.chip.t { background:var(--teal-lt); color:#0a5e5d; } .chip.f { background:var(--coral-lt); color:#a53a1b; } .chip.p { background:var(--purple-lt); color:#4b2f8f; } .chip.a { background:var(--amber-lt); color:#7a4f10; } .chip.g { background:var(--bg); color:var(--muted); }
+.stat { display:inline-block; text-align:center; padding:10px 16px; border-radius:14px; background:var(--bg); margin:6px 8px 6px 0; min-width:120px; }
+.stat .v { font-family:"Courier New",monospace; font-weight:bold; font-size:1.6rem; }
+.stat .k { font-size:0.8rem; color:var(--muted); font-weight:bold; letter-spacing:1px; text-transform:uppercase; }
+.illus { font-size:0.8rem; color:var(--muted); font-style:italic; margin-top:6px; }
+.tokrow { display:flex; flex-wrap:wrap; gap:4px; align-items:flex-end; }
+.tok { font-family:"Courier New",monospace; font-size:0.95rem; padding:6px 8px; border-radius:8px; border:2px solid var(--line); background:#fff; transition:all .3s; white-space:pre; }
+.tok.pad { color:#9aa3aa; background:#F4F5F6; border-style:dashed; }
+.tok.hi { border-color:var(--teal); background:var(--teal-lt); font-weight:bold; }
+.tok.bad { border-color:var(--coral); background:var(--coral-lt); font-weight:bold; }
+.tok.pu { border-color:var(--purple); background:var(--purple-lt); font-weight:bold; }
+.tok.dim { opacity:.35; }
+table.grid { border-collapse:separate; border-spacing:4px; }
+table.grid td, table.grid th { font-family:"Courier New",monospace; font-size:0.9rem; padding:6px 8px; border-radius:8px; text-align:center; }
+table.grid th { color:var(--muted); font-weight:bold; font-size:0.78rem; }
+.slider { width:100%; accent-color:var(--teal); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:1100px) { .two { grid-template-columns:1fr; } }
+.card { border:2px solid var(--line); border-radius:14px; padding:12px 16px; background:#fff; }
+.card h4 { margin:0 0 6px; font-size:1.05rem; }
+.shape { font-family:"Courier New",monospace; font-weight:bold; color:var(--purple); }
+
+#s1 .st-body, #s2 .st-body, #s3 .st-body { grid-template-columns:minmax(0,2.4fr) minmax(280px,1fr); }
+.wrow { display:flex; align-items:flex-end; gap:2px; height:90px; }
+.wrow .b { width:100%; border-radius:3px 3px 0 0; transition:height .4s; }
+.wcol { display:flex; flex-direction:column; align-items:center; min-width:0; flex:1 1 0; }
+.wcol .t { max-width:100%; font-family:"Courier New",monospace; font-size:0.66rem; writing-mode:vertical-rl; transform:rotate(180deg); height:92px; overflow:hidden; color:var(--ink); margin-top:4px; }
+.meth { display:grid; grid-template-columns:150px minmax(0,1fr) 120px; gap:10px; align-items:center; margin-bottom:8px; }
+.meth .n { font-weight:bold; }
+.pipe { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:12px; }
+.pipe .p { border:2px solid var(--line); border-radius:10px; padding:6px 10px; font-family:"Courier New",monospace; font-size:0.85rem; background:#fff; transition:all .3s; }
+.pipe .p.on { border-color:var(--purple); background:var(--purple-lt); font-weight:bold; }
+.pipe .ar { color:var(--muted); font-size:1.2rem; }
+.mx { display:inline-grid; gap:2px; vertical-align:top; }
+.mx div { min-width:44px; height:30px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-family:"Courier New",monospace; font-size:0.78rem; font-weight:bold; border:1px solid #E1E5E8; }
+.mblock { display:inline-block; margin:0 14px 10px 0; vertical-align:top; }
+.mblock .lbl { margin-bottom:4px; }
+@keyframes kfade { to { opacity:0; visibility:hidden; } }
+</style></head>
+<body><div class="wrap">
+<div class="kicker">TARA · Week 5 · Section 5 · Attention probes for high-stakes detection</div>
+<h1>Attention probes — letting the probe choose which tokens matter</h1>
+<div class="sub">Same order as the slides. New target: is the <b>user’s request</b> high-stakes? A prompt is many tokens, but a probe needs one vector. <b>Last token</b> and <b>mean pooling</b> throw away “which part mattered”. An <b>attention probe</b> (AttnLite) learns one query that weights the tokens, then classifies the weighted sum. Llama-3.1-8B-Instruct, layer 16.</div>
+
+<h2>1 · The highlighter — a worked example with real numbers</h2>
+<div id="s0h"></div>
+<h2>2 · One prompt, many tokens — how do we get one score?</h2>
+<div id="s1"></div>
+<h2>3 · How is it different from a normal probe? — watch q learn where to look</h2>
+<div id="sq"></div>
+<h2>4 · AttnLite step by step — shapes you will code</h2>
+<div id="s2"></div>
+<h2>5 · Reading what the probe attends to</h2>
+<div id="s3"></div>
+<h2>6 · Does it help? — the notebook’s AUROC table</h2>
+<div id="sres"></div>
+
+<div class="note">Token-level signals and attention weights here are <b>illustrative</b> (hand-built to show the mechanism). The paper reports attention probes matching prompted-LLM classifiers at around six orders of magnitude less compute; whether AttnLite wins in <i>your</i> run (smaller data, no tuning) is an open question the notebook asks you to check.</div>
+<div class="note" style="background:var(--bg)"><b>Read more:</b> <a href="https://arxiv.org/abs/2506.10805" target="_blank">Detecting High-Stakes Interactions with Activation Probes</a> · <a href="https://blog.eleuther.ai/attention-probes/" target="_blank">EleutherAI — attention probes</a> · dataset: <span class="mono">Arrrlex/models-under-pressure</span></div>
+</div>
+<script>// ===== TARA kit (shared with Week 4 pages) =====
+
+function seededRand(seed) { let s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+function softmax(arr) { const m = Math.max(...arr.filter(v => v > -1e8)); const ex = arr.map(v => v <= -1e8 ? 0 : Math.exp(v - m)); const s = ex.reduce((a, b) => a + b, 0); return ex.map(v => v / s); }
+
+function argmax(a) { let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; }
+
+function rampColor(w, base = [14, 124, 123]) { const t = Math.max(0, Math.min(1, w)); return `rgb(${Math.round(255 - t * (255 - base[0]))},${Math.round(255 - t * (255 - base[1]))},${Math.round(255 - t * (255 - base[2]))})`; }
+
+function divColor(v, bound = 1) { const t = Math.max(-1, Math.min(1, v / bound)); if (t >= 0) return rampColor(t); return `rgb(255,${Math.round(255 + t * (255 - 87))},${Math.round(255 + t * (255 - 46))})`; }
+
+function hl(line) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  let code = line, com = '';
+  const ci = line.indexOf('#'); if (ci >= 0) { code = line.slice(0, ci); com = line.slice(ci); }
+  let out = esc(code).replace(/("[^"]*"|'[^']*')|\b(def|return|for|in|if|else|lambda|None|True|False|with|try|finally|class)\b|\b(\d+(?:\.\d+)?)\b/g, (m, s, k, n) => s ? `<span class="str">${s}</span>` : k ? `<span class="kw">${k}</span>` : `<span class="num">${n}</span>`);
+  return out + (com ? `<span class="com">${esc(com)}</span>` : '');
+}
+
+function codePair(el, title, rows) {
+  el.classList.add('codepair');
+  el.innerHTML = `<div class="hd c">${title}</div><div class="hd p">what it does</div>` +
+    rows.map((r, i) => `<div class="ln c" data-i="${i}">${r.code ? hl(r.code) : '&nbsp;'}</div><div class="ln p" data-i="${i}">${r.say || '&nbsp;'}</div>`).join('') +
+    `<div class="c pad"></div><div class="p pad"></div>`;
+  return (on = [], doneBelow = -1) => el.querySelectorAll('.ln').forEach(d => { const i = +d.dataset.i; d.classList.toggle('on', on.includes(i)); d.classList.toggle('done', i < doneBelow && !on.includes(i)); });
+}
+
+// ---------------- Stepper: every section = ① Intuition steps, then ② Code steps, one shared visual ----------------
+const STEPPERS = [];
+function Stepper(root, cfg) {
+  // cfg: { intuition:[{say, ex, v}], code:{file, lines:[...], steps:[{a:[...], say, v}]}, render(v, mode, k, vis) }
+  if (typeof root === 'string') root = document.getElementById(root);
+  root.classList.add('stepper');
+  const hasCode = !!cfg.code;
+  root.innerHTML = `<div class="st-head">
+      <div class="seg st-modes"><button data-m="i" class="on">① Intuition</button>${hasCode ? '<button data-m="c">② Pseudocode</button>' : ''}</div>
+      <button class="st-back">◀ Back</button><button class="primary st-next">Next ▶</button><span class="st-count mono"></span></div>
+    <div class="st-body"><div class="st-vis"></div><div class="st-side"><div class="st-say"></div><div class="st-ex"></div><div class="st-code"></div></div></div>`;
+  const q = s => root.querySelector(s);
+  const self = { mode: 'i', k: 0, root };
+  const steps = () => self.mode === 'i' ? cfg.intuition : cfg.code.steps;
+  self.render = () => {
+    const st = steps()[self.k];
+    root.querySelectorAll('.st-modes button').forEach(b => b.classList.toggle('on', b.dataset.m === self.mode));
+    q('.st-say').innerHTML = st.say;
+    q('.st-ex').innerHTML = st.ex ? `<b>Example</b> ${st.ex}` : '';
+    q('.st-ex').style.display = st.ex ? 'block' : 'none';
+    if (self.mode === 'c') {
+      const last = Math.max(...st.a);
+      q('.st-code').style.display = 'block';
+      q('.st-code').innerHTML = `<div class="hd">${cfg.code.file}</div>` + cfg.code.lines.map((l, i) => `<div class="l ${st.a.includes(i) ? 'on' : ''} ${i > last ? 'future' : ''}">${l ? hl(l.replace(/(\S)\s{2,}#/, '$1  #')) : '&nbsp;'}</div>`).join('');
+    } else q('.st-code').style.display = 'none';
+    q('.st-count').textContent = `${self.mode === 'i' ? 'intuition' : 'pseudocode'} · step ${self.k + 1} / ${steps().length}`;
+    q('.st-back').disabled = self.k === 0 && self.mode === 'i';
+    q('.st-next').disabled = self.k === steps().length - 1 && (self.mode === 'c' || !hasCode);
+    q('.st-next').textContent = (self.k === steps().length - 1 && self.mode === 'i' && hasCode) ? 'Go to pseudocode ▶' : 'Next ▶';
+    cfg.render(st.v || {}, self.mode, self.k, q('.st-vis'));
+  };
+  self.next = () => { if (self.k < steps().length - 1) self.k++; else if (self.mode === 'i' && hasCode) { self.mode = 'c'; self.k = 0; } self.render(); };
+  self.back = () => { if (self.k > 0) self.k--; else if (self.mode === 'c') { self.mode = 'i'; self.k = cfg.intuition.length - 1; } self.render(); };
+  q('.st-next').onclick = self.next; q('.st-back').onclick = self.back;
+  root.querySelectorAll('.st-modes button').forEach(b => b.onclick = () => { self.mode = b.dataset.m; self.k = 0; self.render(); });
+  STEPPERS.push(self); self.render();
+  return self;
+}
+// ---------------- presenter mode: one section at a time, tabs, keys, text size, full screen ----------------
+let ACTIVE_ST = null;
+function nearestStepper() {
+  if (ACTIVE_ST && ACTIVE_ST.root.offsetParent !== null) return ACTIVE_ST;
+  const mid = window.innerHeight / 2; let best = STEPPERS[0], bd = 1e9;
+  STEPPERS.forEach(s => { const r = s.root.getBoundingClientRect(); const d = Math.abs((r.top + r.bottom) / 2 - mid); if (r.bottom > 0 && r.top < window.innerHeight && d < bd) { bd = d; best = s; } });
+  return best;
+}
+function setFont(px) { document.documentElement.style.fontSize = px + 'px'; try { localStorage.setItem('tara-font', px); } catch (e) {} }
+function curFont() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
+window.addEventListener('load', () => {
+  try { const f = localStorage.getItem('tara-font'); if (f) setFont(+f); } catch (e) {}
+  const secs = STEPPERS.map(st => { let h = st.root.previousElementSibling; while (h && h.tagName !== 'H2') h = h.previousElementSibling; return { st, h }; });
+  secs.sort((x, y) => (x.st.root.compareDocumentPosition(y.st.root) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  const wrap = document.querySelector('.wrap'); if (!wrap || !secs.length) return;
+  const bar = document.createElement('div'); bar.className = 'pbar';
+  bar.innerHTML = (secs.length > 1 ? secs.map((s, i) => `<button class="sec" data-i="${i}"><b>${i + 1}</b> ${(s.h ? s.h.textContent : 'Section ' + (i + 1)).replace(/^\s*\d+\s*·\s*/, '').split(/ — | – /)[0]}</button>`).join('') : '') +
+    `<span class="sp"></span><button data-a="-" title="smaller text (−)">A−</button><button data-a="+" title="bigger text (+)">A+</button><button data-a="f" title="full screen (F)">⛶</button>` + (secs.length > 1 ? `<button data-a="all" title="show every section (0)">all</button>` : '');
+  const sub = wrap.querySelector('.sub'); (sub || wrap.firstChild).after(bar);
+  let all = secs.length < 2;
+  window.showSection = i => {
+    ACTIVE_ST = all ? null : secs[i].st;
+    secs.forEach((s, j) => { const on = all || j === i; s.st.root.style.display = on ? '' : 'none'; if (s.h) s.h.style.display = on ? '' : 'none'; });
+    bar.querySelectorAll('.sec').forEach(b => b.classList.toggle('on', !all && +b.dataset.i === i));
+    const ab = bar.querySelector('[data-a="all"]'); if (ab) ab.classList.toggle('on', all);
+    if (!all) { const top = bar.getBoundingClientRect().top + window.scrollY; if (window.scrollY > top) window.scrollTo(0, top); }
+  };
+  bar.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.i != null) { all = false; showSection(+b.dataset.i); }
+    else if (b.dataset.a === '+') setFont(curFont() + 2);
+    else if (b.dataset.a === '-') setFont(Math.max(14, curFont() - 2));
+    else if (b.dataset.a === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (b.dataset.a === 'all') { all = !all; showSection(Math.max(0, secs.findIndex(s => s.st === ACTIVE_ST))); }
+  };
+  showSection(0);
+  window._secs = secs.length;
+  const kh = document.createElement('div'); kh.className = 'keys'; kh.textContent = '→ next · ← back' + (secs.length > 1 ? ' · 1–' + secs.length + ' section' : '') + ' · C intuition/pseudocode · + − text size · F full screen'; document.body.appendChild(kh);
+});
+document.addEventListener('keydown', e => {
+  if (!STEPPERS.length || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const best = nearestStepper();
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); best.next(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); best.back(); }
+  else if (/^[1-9]$/.test(e.key) && window.showSection && +e.key <= (window._secs || 0) && window._secs > 1) window.showSection(+e.key - 1);
+  else if (e.key === '+' || e.key === '=') setFont(curFont() + 2);
+  else if (e.key === '-') setFont(Math.max(14, curFont() - 2));
+  else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+  else if (e.key === 'c' || e.key === 'C') { best.mode = best.mode === 'i' ? 'c' : 'i'; best.k = 0; best.render(); }
+});
+
+function gauss(rand) { let u = 0, v = 0; while (u === 0) u = rand(); while (v === 0) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const COL = { t:'#0E7C7B', f:'#E4572E', p:'#6C4AB6', a:'#B7791F', g:'#8A949C', ink:'#1A1A1A', line:'#C9D0D5' };
+// generic SVG scatter. pts: [{x,y,c,o}] ; opts: {w,h,pad,xr,yr,lines:[{x1,y1,x2,y2,c,w,dash,arrow,label}], xlab, ylab}
+function scatterSVG(pts, o = {}) {
+  const W = o.w || 520, H = o.h || 380, P = o.pad || 36;
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const xr = o.xr || [Math.min(...xs), Math.max(...xs)], yr = o.yr || [Math.min(...ys), Math.max(...ys)];
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - 2 * P), sy = y => H - P - (y - yr[0]) / (yr[1] - yr[0]) * (H - 2 * P);
+  const UID = (window._svgN = (window._svgN || 0) + 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><defs>` +
+    ['t','f','p','a','g','ink'].map(k => `<marker id="ar${k}_${UID}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COL[k]}"/></marker>`).join('') + `</defs>`;
+  if (o.axes !== false) { s += `<line x1="${P}" y1="${H - P}" x2="${W - P / 2}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/><line x1="${P}" y1="${H - P}" x2="${P}" y2="${P / 2}" stroke="#C9D0D5" stroke-width="2"/>`;
+    if (o.xlab) s += `<text x="${W - P}" y="${H - 10}" text-anchor="end" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.xlab}</text>`;
+    if (o.ylab) s += `<text x="12" y="${P / 2 + 4}" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.ylab}</text>`; }
+  (o.under || []).forEach(q => { s += q(sx, sy); });
+  pts.forEach(p => { s += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${p.r || 5}" fill="${p.c || COL.g}" fill-opacity="${p.o ?? 0.7}" ${p.s ? `stroke="${p.s}" stroke-width="2.5"` : ''}/>`; });
+  s += `<clipPath id="cp${W}${H}"><rect x="${P}" y="${P / 2}" width="${W - 1.5 * P}" height="${H - 1.5 * P}"/></clipPath>`;
+  (o.lines || []).forEach(l => { const col = COL[l.c] || l.c; s += `<line x1="${sx(l.x1)}" y1="${sy(l.y1)}" x2="${sx(l.x2)}" y2="${sy(l.y2)}" stroke="${col}" stroke-width="${l.w || 3}" ${l.clip ? `clip-path="url(#cp${W}${H})"` : ''} ${l.dash ? 'stroke-dasharray="8 6"' : ''} ${l.arrow ? `marker-end="url(#ar${l.c}_${UID})"` : ''}/>`;
+    if (l.label) s += `<text x="${sx(l.x2) + (l.dx || 6)}" y="${sy(l.y2) + (l.dy || -6)}" font-size="18" font-weight="bold" fill="${col}" font-family="Calibri,Carlito,sans-serif">${l.label}</text>`; });
+  (o.marks || []).forEach(m => { s += `<g><circle cx="${sx(m.x)}" cy="${sy(m.y)}" r="9" fill="#fff" stroke="${COL[m.c] || m.c}" stroke-width="4"/>${m.label ? `<text x="${sx(m.x) + 12}" y="${sy(m.y) + 5}" font-size="17" font-weight="bold" fill="${COL[m.c] || m.c}" font-family="Calibri,Carlito,sans-serif">${m.label}</text>` : ''}</g>`; });
+  (o.texts || []).forEach(t => { s += `<text x="${sx(t.x)}" y="${sy(t.y)}" font-size="${t.size || 17}" font-weight="bold" fill="${COL[t.c] || t.c || '#4F5A63'}" text-anchor="${t.anchor || 'start'}" font-family="Calibri,Carlito,sans-serif">${t.t}</text>`; });
+  return s + '</svg>';
+}
+// simple line/curve chart: series [{pts:[[x,y]..], c, dash, w}]
+function lineSVG(series, o = {}) {
+  const W = o.w || 520, H = o.h || 300, P = 44;
+  const xr = o.xr, yr = o.yr;
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - P - 16), sy = y => H - P + 6 - (y - yr[0]) / (yr[1] - yr[0]) * (H - P - 20);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat">`;
+  (o.yticks || []).forEach(v => { s += `<line x1="${P}" x2="${W - 16}" y1="${sy(v)}" y2="${sy(v)}" stroke="#EEF0F2"/><text x="${P - 6}" y="${sy(v) + 5}" font-size="16" text-anchor="end" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.xticks || []).forEach(v => { s += `<text x="${sx(v)}" y="${H - P + 24}" font-size="16" text-anchor="middle" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.bands || []).forEach(b => { s += `<rect x="${sx(b[0])}" y="${sy(yr[1])}" width="${sx(b[1]) - sx(b[0])}" height="${sy(yr[0]) - sy(yr[1])}" fill="${b[2] || '#DCEEED'}" opacity=".6"/>`; });
+  series.forEach(se => { s += `<polyline fill="none" stroke="${COL[se.c] || se.c}" stroke-width="${se.w || 3}" ${se.dash ? 'stroke-dasharray="7 6"' : ''} points="${se.pts.map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ')}"/>`; });
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${sy(yr[0])}" y2="${sy(yr[1])}" stroke="${COL[v.c] || v.c}" stroke-width="2" stroke-dasharray="6 5"/>${v.label ? `<text x="${sx(v.x) + 6}" y="${sy(yr[1]) + 16}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  (o.dots || []).forEach(d => { s += `<circle cx="${sx(d[0])}" cy="${sy(d[1])}" r="7" fill="${COL[d[2]] || d[2]}" stroke="#fff" stroke-width="2"/>`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  if (o.ylab) s += `<text x="14" y="${H / 2}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" transform="rotate(-90 14 ${H / 2})" font-family="Calibri,Carlito,sans-serif">${o.ylab}</text>`;
+  return s + '</svg>';
+}
+function histSVG(groups, o = {}) { // groups: [{vals, c}] ; draws overlaid histograms
+  const W = o.w || 520, H = o.h || 220, P = 30, lo = o.lo, hi = o.hi, nb = o.bins || 28;
+  const bw = (hi - lo) / nb; let mx = 1; const hs = groups.map(g => { const h = Array(nb).fill(0); g.vals.forEach(v => { const i = Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / bw))); h[i]++; }); mx = Math.max(mx, ...h); return h; });
+  const sx = x => P + (x - lo) / (hi - lo) * (W - 2 * P);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><line x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/>`;
+  hs.forEach((h, gi) => h.forEach((c, i) => { if (!c) return; const hh = c / mx * (H - 2 * P); s += `<rect x="${sx(lo + i * bw) + 1}" y="${H - P - hh}" width="${(W - 2 * P) / nb - 2}" height="${hh}" fill="${COL[groups[gi].c] || groups[gi].c}" opacity="0.55" rx="2"/>`; }));
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${P / 2}" y2="${H - P}" stroke="${COL[v.c] || v.c}" stroke-width="3" ${v.dash ? 'stroke-dasharray="6 5"' : ''}/>${v.label ? `<text x="${sx(v.x) + 6}" y="${P / 2 + 12}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  return s + '</svg>';
+}
+
+
+// ---------------- Highlighter lab ----------------
+const HT = ['How', 'do', 'I', 'hide', 'funds', 'from', 'auditors', '?'], HD = [0.1, 0, 0, 0.9, 0.6, 0.2, 0.8, 0.1];
+let hFill = 0;
+function rh(v, mode, k, el) {
+  if (v.fill != null) hFill = v.fill;
+  const toks = hFill ? ['(filler ×' + hFill + ')'].concat(HT) : HT, dng = hFill ? [0].concat(HD) : HD, cnt = hFill ? [hFill].concat(HT.map(() => 1)) : HT.map(() => 1);
+  const sc = dng.map(x => 3 * x), ex = sc.map(Math.exp), Z = ex.reduce((a, b, i) => a + b * cnt[i], 0), w = ex.map(e => e / Z), ctx = w.reduce((a, b, i) => a + b * cnt[i] * dng[i], 0);
+  const N = cnt.reduce((a, b) => a + b, 0), mean = dng.reduce((a, b, i) => a + b * cnt[i], 0) / N, last = dng[dng.length - 1], logit = 6 * ctx - 2, prob = 1 / (1 + Math.exp(-logit));
+  let h = `<div class="ctrl"><label>Harmless filler tokens in front:</label><input type="range" min="0" max="24" step="4" value="${hFill}" class="slider" id="hf" style="max-width:300px"><span class="big" style="font-size:1.4rem">${hFill}</span></div>`;
+  const rowsShow = v.rows || 1;
+  h += `<table class="grid"><tr><th></th>${toks.map(t => `<th style="font-size:0.9rem">${t}</th>`).join('')}</tr>`;
+  const R = [['danger score (token vector · danger direction)', dng.map(x => x.toFixed(1))], ['score = q · token = 3 × danger', sc.map(x => x.toFixed(1))], ['e^score', ex.map(x => x.toFixed(2))], ['weight = e^score / Σ', w.map(x => x.toFixed(3))], ['weight × danger', w.map((x, i) => (x * dng[i]).toFixed(3))]];
+  R.slice(0, rowsShow).forEach((r, ri) => { h += `<tr><th style="text-align:right">${r[0]}</th>${r[1].map((x, i) => `<td style="background:${ri === 3 ? `rgba(108,74,182,${Math.min(1, w[i] * 2.2)})` : ri === 0 ? `rgba(228,87,46,${dng[i]})` : '#F2F4F5'};color:${ri === 3 && w[i] > 0.25 ? '#fff' : '#1A1A1A'}">${x}</td>`).join('')}</tr>`; });
+  h += `</table>`;
+  if (rowsShow >= 4) h += `<div class="legend">Σ e^score = ${Z.toFixed(2)}${hFill ? ` (filler counted ×${hFill})` : ''} · weights sum to 1</div>`;
+  if (v.res) h += `<div style="margin-top:10px"><div class="stat"><div class="k">last token</div><div class="v">${last.toFixed(2)}</div></div><div class="stat"><div class="k">mean</div><div class="v">${mean.toFixed(2)}</div></div><div class="stat"><div class="k">attention</div><div class="v" style="color:${COL.p}">${ctx.toFixed(2)}</div></div>${v.res > 1 ? `<div class="stat"><div class="k">P(high-stakes)</div><div class="v">${prob.toFixed(2)}</div></div>` : ''}</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}">${v.note}</div>`;
+  el.innerHTML = h; el.querySelector('#hf').oninput = e => { hFill = +e.target.value; rh({ ...v, fill: hFill, note: null }, mode, k, el); };
+}
+Stepper('s0h', { render: rh, intuition: [
+  { say: 'Each token has its own activation vector (4096 numbers). We look at ONE thing about it: how far it points along a “danger” direction — one number per token.', v: { fill: 0, rows: 1 } },
+  { say: 'Last token: “?” has danger 0.1 → LOW. The danger sat in “hide” and “auditors”. Mean: 2.7 / 8 = 0.34. Now add harmless filler.', v: { fill: 16, rows: 1, res: 1, bad: 1, note: 'With 16 filler tokens the mean drops to 0.11 — the danger is diluted.' } },
+  { say: 'Attention probe = a highlighter. Step 1: score each token with a learned query q. Here q = (3, 0), so score = 3 × danger.', v: { fill: 0, rows: 2 } },
+  { say: 'Step 2: softmax. Exponentiate (big scores get MUCH bigger), divide by the total → weights that sum to 1.', v: { fill: 0, rows: 4 } },
+  { say: 'Step 3: weighted sum. “hide” and “auditors” get most of the weight → context danger = 0.69.', v: { fill: 0, rows: 5, res: 1, good: 1 } },
+  { say: 'Step 4: a linear layer turns it into a probability: σ(6 × 0.69 − 2) = 0.89 → HIGH-STAKES.', v: { fill: 0, rows: 5, res: 2, good: 1 } },
+  { say: 'Add filler again: attention still puts most weight on the dangerous words — 0.49 vs the mean’s 0.11.', v: { fill: 16, rows: 5, res: 2, good: 1, note: 'Padding works the same way, but stronger: its score is set to −∞ → e^−∞ = 0 → weight exactly 0.' } } ] });
+
+// ---------------- Section 1: pooling ----------------
+const HEAD = ['<user>', 'I', ' manage', ' payroll', ' for', ' a', ' clinic', '.'];
+const HEAD_S = [0, -0.3, -0.2, 0.0, -0.3, -0.3, -0.1, -0.2];
+const HI = { t: [' How', ' do', ' I', ' move', ' patient', ' funds', ' into', ' my', ' own', ' account', ' without', ' the', ' auditors', ' noticing', '?'], s: [-0.1, -0.2, 0.0, 0.7, 0.9, 1.1, 0.4, 0.9, 1.2, 1.1, 1.8, 0.8, 1.9, 2.2, 1.2] };
+const LO = { t: [' How', ' do', ' I', ' move', ' our', ' payroll', ' export', ' into', ' a', ' new', ' spreadsheet', ' template', '?'], s: [-0.1, -0.2, -0.1, -0.1, -0.3, -0.2, -0.3, -0.3, -0.4, -0.3, -0.5, -0.4, -0.4] };
+const FILL = { t: [' I', "'ve", ' worked', ' there', ' for', ' years', ' and', ' the', ' team', ' is', ' lovely', '.', ' We', ' just', ' moved', ' offices', ' and', ' everyone', ' is', ' settling', ' in', '.'], s: [-0.4, -0.5, -0.4, -0.5, -0.4, -0.5, -0.4, -0.4, -0.5, -0.4, -0.6, -0.4, -0.4, -0.5, -0.3, -0.4, -0.4, -0.5, -0.4, -0.5, -0.4, -0.4] };
+let p1 = 'hi', p1long = 0;
+function buildPrompt(which, long) { const B = which === 'hi' ? HI : LO; const t = HEAD.concat(long ? FILL.t : [], B.t), s = HEAD_S.concat(long ? FILL.s : [], B.s.slice());
+  if (long) s[s.length - 1] = which === 'hi' ? 0.25 : -0.45; return { t, s }; }
+function weightsFor(method, P) { const n = P.t.length;
+  if (method === 'last') return P.t.map((_, i) => i === n - 1 ? 1 : 0);
+  if (method === 'mean') return P.t.map(() => 1 / n);
+  return softmax(P.s.map((x, i) => (i === 0 ? -9 : 0) + 2.2 * Math.max(x, -0.2) + (P.t[i] === '?' || P.t[i] === '.' ? 0.3 : 0))); }
+function r1(v, mode, k, el) {
+  if (v.p) p1 = v.p; if (v.long != null) p1long = v.long;
+  const P = buildPrompt(p1, p1long), thr = 0.3;
+  let h = `<div class="ctrl"><label>Prompt:</label><div class="seg" id="p1p"><button data-p="hi" class="${p1 === 'hi' ? 'on' : ''}">high-stakes</button><button data-p="lo" class="${p1 === 'lo' ? 'on' : ''}">low-stakes twin</button></div>`;
+  if (v.longT) h += `<div class="seg coral" id="p1l" style="margin-left:10px"><button data-l="0" class="${!p1long ? 'on' : ''}">short</button><button data-l="1" class="${p1long ? 'on' : ''}">+ harmless context</button></div>`;
+  h += `</div><div class="lbl">each bar = that token’s activation · high-stakes direction (illustrative)</div>`;
+  const mx = 2.3; h += `<div class="meth"><div></div><div class="wrow" style="height:110px;align-items:center;position:relative">${P.s.map(x => `<div class="wcol"><div style="height:55px;display:flex;align-items:flex-end;width:100%">${x > 0 ? `<div class="b" style="height:${x / mx * 55}px;background:${COL.f}"></div>` : ''}</div><div style="height:55px;width:100%">${x < 0 ? `<div style="height:${-x / mx * 55}px;background:${COL.t};border-radius:0 0 3px 3px"></div>` : ''}</div></div>`).join('')}</div><div></div></div>`;
+  h += `<div class="meth"><div></div><div class="wrow" style="height:auto">${P.t.map(t => `<div class="wcol"><div class="t">${t.replace('<', '&lt;')}</div></div>`).join('')}</div><div></div></div>`;
+  const methods = (v.methods || []);
+  methods.forEach(m => { const w = weightsFor(m, P), score = w.reduce((s, wi, i) => s + wi * P.s[i], 0);
+    h += `<div class="meth" style="margin-top:10px"><div class="n">${{ last: 'Last token', mean: 'Mean pool', attn: 'Attention probe' }[m]}</div><div class="wrow" style="height:44px">${w.map(x => `<div class="wcol"><div class="b" style="height:${Math.sqrt(x) * 40}px;background:${m === 'attn' ? COL.p : m === 'mean' ? COL.a : COL.ink}"></div></div>`).join('')}</div><div><span class="mono" style="font-weight:bold">${score.toFixed(2)}</span> <span class="chip ${score > thr ? 'f' : 't'}">${score > thr ? 'high' : 'low'}</span></div></div>`; });
+  if (methods.length) h += `<div class="legend">bars = pooling weights over tokens (they sum to 1; height ∝ √weight so small weights stay visible) · score = Σ weight × signal · call “high” if &gt; ${thr}</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}">${v.note}</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('#p1p button').forEach(b => b.onclick = () => { p1 = b.dataset.p; r1({ ...v, p: p1 }, mode, k, el); });
+  el.querySelectorAll('#p1l button').forEach(b => b.onclick = () => { p1long = +b.dataset.l; r1({ ...v, long: p1long }, mode, k, el); });
+}
+Stepper('s1', {
+  render: r1,
+  intuition: [
+    { say: 'New target: not the model’s state, but the USER’S REQUEST. Is it high-stakes — could a bad answer cause serious real-world harm?', ex: 'Readable from activations BEFORE the model writes anything, reusing activations it computes anyway — that is why it is so cheap.', v: { p: 'hi', long: 0 } },
+    { say: 'Each token has its own activation. Here: how strongly each token points along a “high-stakes” direction. Red = up, teal = down.', v: { p: 'hi', long: 0 } },
+    { say: 'Sections 1–4 used ONE position (last token) or a plain average. Option 1 — last token: all weight on “?”, hoping it summarises the prompt.', v: { p: 'hi', long: 0, methods: ['last'] } },
+    { say: 'Option 2 — mean pool: equal weight on every real token.', v: { p: 'hi', long: 0, methods: ['last', 'mean'] } },
+    { say: 'Option 3 — attention probe: the probe LEARNS which tokens to weight. Weights = softmax over tokens of (token · learned query).', v: { p: 'hi', long: 0, methods: ['last', 'mean', 'attn'], good: 1, note: 'The weight concentrates on “without the auditors noticing” — the clause that makes it high-stakes.' } },
+    { say: 'The low-stakes twin: same role, same topic, harmless request. All three say low.', v: { p: 'lo', long: 0, methods: ['last', 'mean', 'attn'] } },
+    { say: 'Stress test: add harmless context before the dangerous clause. Mean pooling gets diluted; the last token’s summary weakens; attention still finds the clause.', v: { p: 'hi', long: 1, longT: 1, methods: ['last', 'mean', 'attn'], bad: 1, note: 'Long prompt, one dangerous clause: the failure mode the paper flags for mean pooling.' } },
+  ],
+  code: { file: 'pseudocode · extract_full_sequence_activations', lines: [
+    'for each batch of texts:',
+    '    inputs = tokenizer(batch, padding="max_length", max_length=256, truncation=True)',
+    '    with no_grad: out = model(**inputs, output_hidden_states=True)',
+    '    acts.append(out.hidden_states[layer + 1].cpu().float())   # [b, 256, d]',
+    '    masks.append(inputs.attention_mask.bool().cpu())         # [b, 256]',
+    'return cat(acts), cat(masks)      # KEEP every position + a mask',
+    '# baselines: last = acts[arange(n), mask.sum(1) - 1] ; mean = (acts * m).sum(1) / m.sum(1)'],
+    steps: [
+      { a: [1], say: 'padding="max_length": every batch has the SAME length, so batches concatenate. Padding=True would give different lengths per batch.', v: { p: 'hi', long: 0 } },
+      { a: [2, 3], say: 'Same hidden_states offset as Section 1 — but keep ALL positions this time.', v: { p: 'hi', long: 0 } },
+      { a: [4, 5], say: 'The bool mask travels with the activations: True = real token. The probe needs it to ignore padding.', ex: 'Memory check: 3000 prompts × 256 × 4096 × 4 bytes ≈ 12.6 GB. Store on CPU.', v: { p: 'hi', long: 0 } },
+      { a: [6], say: 'The two baselines fall out of the same tensor — mask-aware, or padding pollutes them.', v: { p: 'hi', long: 0, methods: ['last', 'mean'] } },
+    ] },
+});
+
+// ---------------- q learns ----------------
+const QL = (() => {
+  const r = seededRand(88);
+  const tok = (danger) => { const a = (danger ? 58 + gauss(r) * 10 : -35 + gauss(r) * 22) * Math.PI / 180, L = danger ? 2.3 + r() * 0.5 : 1.5 + r() * 0.6; return [L * Math.cos(a), L * Math.sin(a)]; };
+  const data = [];
+  for (let i = 0; i < 80; i++) { const hi = i % 2, n = 10 + Math.floor(r() * 10), X = []; for (let j = 0; j < n; j++) X.push(tok(false)); if (hi) { const m = 1 + Math.floor(r() * 3); for (let j = 0; j < m; j++) X[Math.floor(r() * n)] = tok(true); } data.push({ X, y: hi }); }
+  const EX = ['I’m', 'writing', 'a', 'novel', '…', 'how', 'do', 'I', 'disable', 'the', 'smoke', 'alarm', 'without', 'noticing', '?'], DANG = new Set(['disable', 'smoke', 'alarm', 'without', 'noticing']);
+  const ex = EX.map(t => ({ t, x: tok(DANG.has(t)), d: DANG.has(t) }));
+  const fwd = (p, X) => { const sc = X.map(x => p[0] * x[0] + p[1] * x[1]), m = Math.max(...sc), e = sc.map(s => Math.exp(s - m)), Z = e.reduce((a, b) => a + b, 0), w = e.map(v => v / Z); const c = [0, 1].map(k => X.reduce((s, x, i) => s + w[i] * x[k], 0)); const lg = p[2] * c[0] + p[3] * c[1] + p[4]; return { w, P: 1 / (1 + Math.exp(-lg)) }; };
+  const loss = p => data.reduce((s, d) => { const P = fwd(p, d.X).P; return s - (d.y ? Math.log(P + 1e-9) : Math.log(1 - P + 1e-9)); }, 0) / data.length;
+  let p = [0.9, -0.9, 0.1, 0.1, 0]; const snaps = [];
+  for (let it = 0; it <= 300; it++) { const L = loss(p); snaps.push({ p: p.slice(), L }); const g = p.map((_, i) => { const q = p.slice(); q[i] += 1e-4; return (loss(q) - L) / 1e-4; }); p = p.map((v, i) => v - 0.6 * g[i]); }
+  return { data, ex, fwd, snaps };
+})();
+let qIt = 0;
+function rq(v, mode, k, el) {
+  if (v.it != null) qIt = v.it;
+  const S = QL.snaps[qIt], X = QL.ex.map(e => e.x), F = QL.fwd(S.p, X), qn = Math.hypot(S.p[0], S.p[1]), qu = [S.p[0] / qn, S.p[1] / qn];
+  const lines = [], texts = [];
+  QL.ex.forEach((e, i) => { lines.push({ x1: 0, y1: 0, x2: e.x[0], y2: e.x[1], c: e.d ? 'f' : 'g', w: e.d ? 3 : 1.5, arrow: 1 }); if (e.d && ['disable', 'noticing'].includes(e.t)) texts.push({ x: e.x[0] + 0.08, y: e.x[1] + 0.12, t: e.t, c: 'f', size: 14 }); });
+  if (v.q !== 0) { lines.push({ x1: 0, y1: 0, x2: 2.6 * qu[0], y2: 2.6 * qu[1], c: 'p', w: 6, arrow: 1, label: 'q', dx: 8, dy: 4 }); if (v.shadow) lines.push({ x1: -3 * qu[0], y1: -3 * qu[1], x2: 3 * qu[0], y2: 3 * qu[1], c: '#E3DAF5', w: 10, clip: 1 }); }
+  texts.push({ x: 1.2, y: -2.4, t: 'grey = harmless tokens', c: 'g', size: 13 });
+  let h = '';
+  if (v.slider) h += `<div class="ctrl"><label>training step:</label><input type="range" min="0" max="300" value="${qIt}" class="slider" id="qr" style="max-width:380px"><span class="big" style="font-size:1.4rem">${qIt}</span></div>`;
+  h += `<div class="row"><div class="col">${scatterSVG([], { xr: [-2.2, 3.2], yr: [-2.6, 3.0], w: 470, h: 470, lines: v.shadow ? [lines.pop()].concat(lines) : lines, texts, axes: false })}</div><div class="col">`;
+  const methods = v.cmp ? [['mean pool (fixed rule)', QL.ex.map(() => 1 / QL.ex.length), COL.a], ['attention (learned q)', F.w, COL.p]] : [['attention weights', F.w, COL.p]];
+  methods.forEach(m => { h += `<div class="lbl" style="margin-top:6px">${m[0]}</div><div class="wrow" style="height:70px">${m[1].map((x, i) => `<div class="wcol"><div class="b" style="height:${Math.max(1, x * 120)}px;background:${QL.ex[i].d ? m[2] : '#C9D0D5'}"></div></div>`).join('')}</div>`; });
+  h += `<div class="wrow" style="height:auto">${QL.ex.map(e => `<div class="wcol"><div class="t" style="color:${e.d ? COL.f : 'inherit'}">${e.t}</div></div>`).join('')}</div>`;
+  const wd = QL.ex.reduce((a, e, i) => a + (e.d ? F.w[i] : 0), 0);
+  h += `<div class="stat"><div class="k">weight on red tokens</div><div class="v" style="color:${COL.p}">${Math.round(wd * 100)}%</div></div><div class="stat"><div class="k">P(high-stakes)</div><div class="v">${F.P.toFixed(2)}</div></div>`;
+  if (v.curve) h += lineSVG([{ pts: QL.snaps.map((q, i) => [i, q.L]), c: 'p' }], { xr: [0, 300], yr: [0, 0.75], w: 420, h: 170, yticks: [0, 0.35, 0.7], xticks: [0, 100, 200, 300], dots: [[qIt, S.L, 'f']], xlab: 'training step', ylab: 'loss' });
+  if (v.src) h += `<div class="card" style="margin-top:8px"><h4>where q comes from</h4><span class="mono">W_q = nn.Parameter([d_model, n_heads])</span><br>start: random numbers, normal(std = 1/√d)<br>train: AdamW (lr 5e-3, weight decay 1e-3), 200 epochs, BCE-with-logits on the <b>prompt</b> labels (high / low stakes)<br>W_q, W_out and b are all learned together — no token is ever labelled.</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}">${v.note}</div>`;
+  el.innerHTML = h + `</div></div><div class="illus">Real gradient descent on a toy: 80 two-dimensional prompts, half with 1–3 “danger” tokens. Only the PROMPT labels are used. Learned: q (2 numbers), w (2) and b.</div>`;
+  const sl = el.querySelector('#qr'); if (sl) sl.oninput = e => { qIt = +e.target.value; rq({ ...v, it: qIt, note: null }, mode, k, el); };
+}
+Stepper('sq', { render: rq, intuition: [
+  { say: 'Every token of one prompt is an arrow (2 of 4096 dims). Red = the dangerous clause, grey = harmless context. A NORMAL probe pools them with a fixed rule — mean pooling gives every token the same weight.', v: { it: 0, q: 0, cmp: 1 } },
+  { say: 'An attention probe adds ONE learned vector q. Each token’s score = token · q = the length of its shadow on q. Softmax turns the scores into weights.', v: { it: 300, shadow: 1 } },
+  { say: 'But nobody labels tokens. At the start q is random — here it points at harmless tokens, so the weights land on the wrong words and P(high-stakes) is ~0.5.', v: { it: 0, curve: 1, bad: 1, note: 'High loss: the prompt IS high-stakes, but the probe can’t tell.' } },
+  { say: 'So where DOES q come from? It is a parameter, W_q, exactly like w in logistic regression: it starts random and is learned from the labels.', v: { it: 0, src: 1 } },
+  { say: 'Training = the same guess → check → nudge as logistic regression, but the nudges also turn q. Weighting the red tokens makes the answer more right, so q turns toward them.', v: { it: 110, curve: 1, slider: 1 } },
+  { say: 'Trained: q points at the danger tokens; they take almost all the weight; P(high-stakes) ≈ 1. Where-to-look was learned from what-to-predict.', v: { it: 300, curve: 1, slider: 1, cmp: 1, good: 1, note: 'Normal probe = fixed pooling + w. Attention probe = learned pooling (q) + w.' } } ],
+  code: { file: 'notebook · AttentionProbe init + train_attention_probe', lines: ['self.W_q = nn.Parameter(t.empty(d_model, n_heads))', 't.nn.init.normal_(self.W_q, std=d_model**-0.5)        # random start', 'optimizer = t.optim.AdamW(probe.parameters(), lr=5e-3, weight_decay=1e-3)', 'for _ in range(200):', '    logits = probe(acts, masks)                       # forward: scores → softmax → pool → W_out', '    loss = BCEWithLogitsLoss()(logits, labels)        # one label per PROMPT', '    loss.backward(); optimizer.step()                 # gradient reaches W_q through the softmax'],
+    steps: [{ a: [0, 1], say: 'q starts as noise.', v: { it: 0, src: 1 } }, { a: [2, 3, 4, 5], say: 'Whole-prompt label, whole-prompt loss.', v: { it: 110, curve: 1 } }, { a: [6], say: 'Backprop turns q toward the tokens that help the prediction.', v: { it: 300, curve: 1, cmp: 1 } }] } });
+
+// ---------------- Section 2: AttnLite shapes, with a tiny numeric example ----------------
+const S2 = { s: 6, d: 4, real: 4 };
+const XR = (() => { const r = seededRand(31); return Array.from({ length: S2.s }, () => Array.from({ length: S2.d }, () => +(gauss(r) * 0.9).toFixed(1))); })();
+const WQ = [[0.8, -0.3], [-0.2, 0.9], [0.6, 0.1], [-0.5, 0.4]];
+const WOUT = [0.7, -0.4, 0.5, 0.2, -0.3, 0.6, 0.1, -0.2];
+function mxHTML(M, o = {}) { const cols = M[0].length; return `<div class="mx" style="grid-template-columns:repeat(${cols},auto)">${M.flat().map((x, i) => { const r = Math.floor(i / cols); const pad = o.pad && r >= S2.real; const txt = x === -Infinity ? '−∞' : (typeof x === 'number' ? x.toFixed(o.dp ?? 1) : x);
+  return `<div style="background:${pad ? '#F4F5F6' : x === -Infinity ? '#FBE4DC' : o.plain ? '#fff' : divColor(x, o.b || 1.5)};color:${pad ? '#9aa3aa' : (!o.plain && Math.abs(x) / (o.b || 1.5) > 0.6 && isFinite(x)) ? '#fff' : '#1A1A1A'}">${txt}</div>`; }).join('')}</div>`; }
+function r2(v, mode, k, el) {
+  const nh = v.heads || 1, sc = Math.sqrt(S2.d);
+  const Wq = WQ.map(r => r.slice(0, nh));
+  const logits = XR.map(x => Array.from({ length: nh }, (_, j) => x.reduce((s, xi, i) => s + xi * Wq[i][j], 0) / sc));
+  const masked = logits.map((r, i) => i >= S2.real ? r.map(() => -Infinity) : r);
+  const wts = Array.from({ length: nh }, (_, j) => softmax(masked.map(r => r[j] === -Infinity ? -1e9 : r[j])));
+  const W = XR.map((_, i) => Array.from({ length: nh }, (_, j) => wts[j][i]));
+  const ctx = Array.from({ length: nh }, (_, j) => Array.from({ length: S2.d }, (_, dd) => XR.reduce((s, x, i) => s + wts[j][i] * x[dd], 0)));
+  const flat = ctx.flat(), logit = flat.reduce((s, x, i) => s + x * WOUT[i], 0) + 0.1;
+  const st = v.st || 0;
+  const pipe = [['x', '[b, s, d]'], ['scores', '[b, s, n]'], ['masked', '[b, s, n]'], ['weights', '[b, s, n]'], ['context', '[b, n, d]'], ['flat', '[b, n·d]'], ['logit', '[b]']];
+  let h = `<div class="pipe">${pipe.map((p, i) => `${i ? '<span class="ar">→</span>' : ''}<span class="p ${st === i ? 'on' : ''}">${p[0]} ${p[1]}</span>`).join('')}</div>`;
+  h += `<div class="legend" style="margin-bottom:8px">toy: one prompt (b = 1), s = 6 positions (last 2 are padding), d = 4, n = ${nh} head${nh > 1 ? 's' : ''}</div>`;
+  h += `<div class="mblock"><div class="lbl">x · tokens × d</div>${mxHTML(XR, { pad: 1 })}</div>`;
+  if (st >= 1) h += `<div class="mblock"><div class="lbl">W_q · d × n</div>${mxHTML(Wq, { b: 1 })}</div><div class="mblock"><div class="lbl">scores = x·W_q / √d</div>${mxHTML(logits, { dp: 2, b: 1, pad: st === 1 })}</div>`;
+  if (st >= 2) h += `<div class="mblock"><div class="lbl">mask pads → −∞</div>${mxHTML(masked, { dp: 2, b: 1 })}</div>`;
+  if (st >= 3) h += `<div class="mblock"><div class="lbl">softmax over s</div>${mxHTML(W, { dp: 2, b: 1, plain: 0 })}<div class="legend">each column sums to 1</div></div>`;
+  if (st >= 4) h += `<div class="mblock"><div class="lbl">context · n × d</div>${mxHTML(ctx, { dp: 2 })}</div>`;
+  if (st >= 5) h += `<div class="mblock"><div class="lbl">flatten → n·d</div>${mxHTML([flat], { dp: 2 })}</div>`;
+  if (st >= 6) h += `<div class="mblock"><div class="lbl">logit = flat·W_out + b</div><div class="big" style="color:${logit > 0 ? COL.f : COL.t}">${logit.toFixed(2)}</div><div class="legend">σ(logit) = P(high-stakes) = ${(1 / (1 + Math.exp(-logit))).toFixed(2)}</div></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}">${v.note}</div>`;
+  el.innerHTML = h;
+}
+Stepper('s2', {
+  render: r2,
+  intuition: [
+    { say: 'Input: the activations for every position, [batch, seq, d_model], plus the padding mask. Grey rows are padding.', v: { st: 0 } },
+    { say: 'Step 1 — score each token: dot it with ONE learned query vector W_q, divide by √d. One number per token per head.', ex: 'Same query for every position — so the score is a pure “how relevant is this token?”', v: { st: 1 } },
+    { say: 'Step 2 — mask: padding gets −∞, so softmax gives it exactly 0 weight.', v: { st: 2 } },
+    { say: 'Step 3 — softmax over the SEQUENCE (dim 1), not over heads. Each head now has weights over real tokens that sum to 1.', v: { st: 3, bad: 0, note: 'Common bug: softmax(dim=-1) — that normalises across heads. With n = 1 it silently gives all 1s.' } },
+    { say: 'Step 4 — weighted sum of the token vectors: one context vector of size d per head.', v: { st: 4 } },
+    { say: 'Step 5 — concatenate the heads → n·d numbers.', v: { st: 5 } },
+    { say: 'Step 6 — a linear classifier on top: one logit per prompt. Train with BCE-with-logits.', v: { st: 6 } },
+    { say: 'Two heads: two independent queries, two weight patterns, concatenated. Different heads can pick up different cues.', v: { st: 6, heads: 2 } },
+    { say: 'vs self-attention in a transformer: there each position makes its OWN query from its hidden state and outputs a new vector per position. Here the query is a learned constant and the output is one logit — like cross-attention with a fixed query.', v: { st: 6, heads: 1 } },
+  ],
+  code: { file: 'pseudocode · attention_probe_forward (einsum strings are the hint)', lines: [
+    'scores = einsum(x, W_q, "b s d, d n -> b s n") / scale     # scale = sqrt(d)',
+    'scores = scores.masked_fill(~mask.unsqueeze(-1), -inf)      # mask: [b, s] → [b, s, 1]',
+    'weights = scores.softmax(dim=1)                             # over the SEQUENCE',
+    'context = einsum(weights, x, "b s n, b s d -> b n d")',
+    'context = context.flatten(start_dim=1)                      # [b, n·d]',
+    'logits = context @ W_out  → squeeze(-1) + b_out            # [b]',
+    'return logits, weights'],
+    steps: [
+      { a: [0], say: 'd is summed away; n is new. Write the shapes above each line before coding.', v: { st: 1 } },
+      { a: [1], say: 'mask is True for REAL tokens, so fill where ~mask. unsqueeze so it broadcasts over heads.', v: { st: 2 } },
+      { a: [2], say: 'dim=1 is s. Check: weights[b, :, h].sum() == 1 over real tokens, ≈ 0 on padding (the tests assert both).', v: { st: 3 } },
+      { a: [3], say: 's is summed away; d survives. One d-vector per head.', v: { st: 4 } },
+      { a: [4, 5], say: 'Flatten heads, linear layer, squeeze to [b]. Return weights too — we inspect them later.', v: { st: 6 } },
+    ] },
+});
+
+// ---------------- Section 3: reading the weights ----------------
+const RD = { t: ['<|begin_of_text|>', '<|start_header_id|>', 'user', '<|end_header_id|>', '\\n\\n', 'My', ' neighbour', ' is', ' away', '.', ' How', ' can', ' I', ' get', ' into', ' his', ' house', ' without', ' him', ' knowing', '?', '<|eot_id|>'],
+  w: [0.004, 0.006, 0.01, 0.008, 0.02, 0.03, 0.05, 0.03, 0.05, 0.06, 0.03, 0.03, 0.03, 0.05, 0.07, 0.06, 0.07, 0.09, 0.06, 0.1, 0.06, 0.02] };
+const KIND = i => i <= 4 || i === 21 ? 'tpl' : ['.', '?'].includes(RD.t[i]) ? 'punct' : [' into', ' house', ' without', ' knowing', ' away'].includes(RD.t[i]) ? 'sig' : 'word';
+function r3(v, mode, k, el) {
+  const mx = Math.max(...RD.w);
+  let h = `<div class="lbl">attention weight per token (head 0) · illustrative high-stakes example</div><div class="wrow" style="height:130px">${RD.w.map((x, i) => { const kd = KIND(i); const hi = (v.early && i >= 5 && i <= 8) || (v.sig && kd === 'sig') || (v.punct && kd === 'punct') || (v.tpl && kd === 'tpl');
+    return `<div class="wcol"><div class="b" style="height:${x / mx * 120}px;background:${hi ? (kd === 'tpl' ? COL.f : COL.p) : '#C9D0D5'}"></div></div>`; }).join('')}</div>`;
+  h += `<div class="wrow" style="height:auto">${RD.t.map(t => `<div class="wcol"><div class="t">${t.replace(/</g, '&lt;')}</div></div>`).join('')}</div>`;
+  if (v.uni) h += `<div class="legend">uniform weight would be ${(1 / RD.t.length).toFixed(3)} per token</div>`;
+  if (v.rank) h += `<div class="two" style="margin-top:10px"><div class="card"><h4>Compare four probes by AUROC</h4>MM (last token) · LR (last token) · LR (mean pool) · Attention probe<div class="legend">on the synthetic test set AND on out-of-distribution sets (Anthropic HH, ToolACE) with no retraining</div></div><div class="card"><h4>What the paper reports</h4>attention ≥ mean &gt; last, and attention generalises best to real-world data. Check whether your smaller run agrees.</div></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}">${v.note}</div>`;
+  el.innerHTML = h;
+}
+Stepper('s3', {
+  render: r3,
+  intuition: [
+    { say: 'Because the query is the same for every position, the weights ARE a per-token relevance score. We can just read them.', v: {} },
+    { say: 'Sanity check 1 — mostly uniform-ish, not one giant spike. Fits the finding that mean probes beat last-token probes (uniform ≈ mean).', v: { uni: 1 } },
+    { say: 'Sanity check 2 — little weight on the earliest content tokens: the model has not yet worked out what the request is about.', v: { early: 1 } },
+    { say: 'Sanity check 3 — “signal words” get more weight: into, house, without, knowing. More common when probing early layers.', v: { sig: 1, good: 1 } },
+    { say: 'Sanity check 4 — at later layers, punctuation (“.”, “?”) can carry a summary of the sentence and pick up weight.', v: { punct: 1 } },
+    { say: 'Red flag — heavy weight on chat-template tokens: they are identical in every prompt, so that would be a shortcut that won’t survive a new format.', ex: 'Also: weights live on BPE tokens — a word split in two gets its weight split in two.', v: { tpl: 1, bad: 1, note: 'Here template weight is tiny → no shortcut. If yours is large, investigate.' } },
+    { say: 'Finally compare all four probes by AUROC — in distribution and out of distribution.', v: { sig: 1, rank: 1 } },
+  ],
+  code: { file: 'pseudocode · training + reading weights (given)', lines: [
+    'probe = AttentionProbe(d_model, n_heads=1)',
+    'opt = AdamW(probe.parameters(), lr=5e-3, weight_decay=1e-3)',
+    'for epoch in range(200):                    # full batch, pre-extracted acts',
+    '    loss = BCEWithLogitsLoss(probe(acts, masks), labels)',
+    '    opt.zero_grad(); loss.backward(); opt.step()',
+    'auroc = roc_auc_score(test_labels, probe(test_acts, test_masks).sigmoid())',
+    'weights = probe.get_attention_weights(acts, masks)   # [b, s, n] → bar chart'],
+    steps: [
+      { a: [0, 1, 2], say: 'No model forward passes during training — just the stored activations. Fast.', v: {} },
+      { a: [3, 4], say: 'Logits into BCEWithLogits (numerically stable), not probabilities into BCE.', v: {} },
+      { a: [5], say: 'AUROC on the held-out test set, then on the OOD sets.', v: { rank: 1 } },
+      { a: [6], say: 'Plot weights for real tokens only (slice by mask.sum()).', v: { sig: 1 } },
+    ] },
+});
+// ---------------- Section 6: does it help? the notebook's own AUROC table ----------------
+const AUR = [['MM · last token', 0.873, 0.767, 0.573, '#6C4AB6'], ['LR · last token', 0.962, 0.732, 0.533, '#B7791F'], ['LR · mean of all tokens', 0.991, 0.876, 0.741, '#0E7C7B'], ['Attention probe', 0.994, 0.849, 0.786, '#E4572E']];
+const AURC = ['Synthetic test<br><span style="font-weight:normal">same style as training</span>', 'Anthropic HH<br><span style="font-weight:normal">real chats</span>', 'ToolACE<br><span style="font-weight:normal">tool-use prompts</span>'];
+function rres(v, mode, k, el) {
+  const cols = v.cols || 1;
+  let h = `<div style="display:grid;grid-template-columns:260px repeat(${cols}, minmax(180px,1fr));gap:10px;align-items:center;max-width:1100px">`;
+  h += '<div></div>' + AURC.slice(0, cols).map(c => `<div style="font-weight:bold;color:var(--muted);font-size:1.05rem;text-align:center">${c}</div>`).join('');
+  AUR.forEach(r => {
+    h += `<div style="font-weight:bold;font-size:1.2rem;color:${r[4]}">${r[0]}</div>`;
+    for (let c = 0; c < cols; c++) {
+      const val = r[1 + c], best = Math.max(...AUR.map(x => x[1 + c])), wpct = Math.max(0, (val - 0.5) / 0.5 * 100);
+      h += `<div style="position:relative;height:56px;background:#F2F4F5;border-radius:10px;overflow:hidden;${val === best ? 'outline:4px solid #1A1A1A;outline-offset:-4px' : ''}"><div style="position:absolute;left:0;top:0;bottom:0;width:${wpct}%;background:${r[4]};opacity:.28"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Courier New',monospace;font-weight:bold;font-size:1.5rem">${val.toFixed(3)}</div></div>`;
+    }
+  });
+  h += '</div><div class="illus" style="margin-top:12px">AUROC (0.5 = coin flip, 1.0 = perfect). Bar = how far above coin flip. Black outline = best in that column. Numbers: the notebook’s expected output, Llama-3.1-8B-Instruct, layer 16.</div>';
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:12px;max-width:1100px">${v.note}</div>`;
+  el.innerHTML = h;
+}
+Stepper('sres', { render: rres, intuition: [
+  { say: 'Four probes, same activations, judged on held-out synthetic prompts. Last token is clearly worst; mean and attention are both near perfect.', v: { cols: 1 } },
+  { say: 'Now real-world prompts the probes never saw in that style. Everything drops — this is the honest test.', v: { cols: 3 } },
+  { say: 'Attention wins 2 of 3 columns; mean pooling wins on Anthropic HH. Both beat last token by a lot.', v: { cols: 3, good: 1, note: 'Lesson: reading <b>many tokens</b> is the big win. Learning WHICH tokens helps most when the key clause is short and the prompt is long — prompts here are ≤ 256 tokens, so plain averaging stays competitive.' } } ] });
+</script></body></html>

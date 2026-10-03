@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PCA with a ruler</title>
+<style>
+:root{--teal:#0E7C7B;--teal-lt:#DCEEED;--teal-dk:#0A5E5D;--coral:#E4572E;--coral-lt:#FBE4DC;--purple:#6C4AB6;--purple-lt:#EAE3F7;--amber:#B7791F;--amber-lt:#FDF1D6;--ink:#1A1A1A;--muted:#4F5A63;--line:#C9D0D5;--bg:#F2F4F5;--code:#1E1E2E}
+*{box-sizing:border-box}
+html{font-size:24px}
+@media (max-width:1300px){html{font-size:19px}}
+body{margin:0;background:#fff;color:var(--ink);font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif;line-height:1.3}
+.top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+.top .t{font-weight:bold;font-size:1.05rem;margin-right:10px}
+.top .t span{color:var(--teal)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{font:inherit;font-size:.72rem;font-weight:bold;border:2px solid var(--line);background:#fff;border-radius:10px;padding:5px 10px;cursor:pointer;color:var(--muted)}
+.tabs button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.tabs button.cur{border-style:dashed}
+.tabs .sep{align-self:center;color:var(--muted);font-size:.7rem;font-weight:bold;margin:0 4px}
+.sp{flex:1}
+.ctl button{font:inherit;font-size:.75rem;font-weight:bold;border:2px solid var(--line);background:#fff;border-radius:10px;padding:5px 12px;cursor:pointer}
+main{max-width:1800px;margin:0 auto;padding:14px 24px}
+h1{font-size:1.6rem;margin:4px 0 8px}
+.stage{border:2px solid var(--line);border-radius:18px;overflow:hidden;background:#fff}
+svg{display:block;width:100%;height:auto;user-select:none;touch-action:none}
+svg text{font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif}
+.say{display:flex;gap:16px;align-items:center;margin-top:12px}
+.say .msg{flex:1;background:var(--teal-lt);color:var(--teal-dk);font-weight:bold;font-size:1.25rem;border-radius:16px;padding:14px 20px;min-height:3.2em;display:flex;align-items:center}
+.say button{font:inherit;font-size:1rem;font-weight:bold;border-radius:14px;padding:14px 22px;border:2px solid var(--line);background:#fff;cursor:pointer}
+.say button.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.say .cnt{font-family:"Courier New",monospace;color:var(--muted);font-size:.8rem;min-width:5em;text-align:center}
+.hint{color:var(--muted);font-size:.75rem;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="top">
+ <div class="t">PCA <span>with a ruler</span></div>
+ <div class="tabs" id="tabs"></div>
+ <div class="sp"></div>
+ <div class="ctl"><button id="bminus">A−</button> <button id="bplus">A+</button> <button id="bfull">⛶</button></div>
+</div>
+<main>
+ <h1 id="h"></h1>
+ <div class="stage"><svg id="st" viewBox="0 0 1600 760"></svg></div>
+ <div class="say"><button id="back">◀</button><div class="msg" id="msg"></div><span class="cnt" id="cnt"></span><button class="primary" id="next">Next ▶</button></div>
+ <div class="hint">→ / ← next · 1–9, 0 jump to a section · drag on the picture to turn the ruler · F full screen</div>
+</main>
+<script>
+/* ---------------- data: the same 20 statements as the slides ---------------- */
+const D={"X":[[1.638,0.765],[0.88,0.277],[1.764,0.288],[1.536,0.06],[1.516,0.513],[1.185,1.577],[0.654,0.666],[1.481,1.865],[1.67,2.056],[0.557,1.295],[-0.742,-1.218],[-1.216,-1.602],[-1.086,-1.294],[-1.072,-1.115],[-1.254,-1.514],[-1.293,-0.525],[-2.087,-0.622],[-1.367,-0.406],[-1.351,-0.519],[-1.413,-0.545]],"T":[1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],"TOP":[0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1]};
+const NAMES=['Paris is in France.','Tokyo is in Japan.','Lima is in Peru.','Rome is in Italy.','Oslo is in Norway.','‘uno’ means ‘one’.','‘gato’ means ‘cat’.','‘casa’ means ‘house’.','‘sol’ means ‘sun’.','‘agua’ means ‘water’.','Paris is in Japan.','Tokyo is in Peru.','Lima is in Italy.','Rome is in Norway.','Oslo is in France.','‘uno’ means ‘tree’.','‘gato’ means ‘sun’.','‘casa’ means ‘cat’.','‘sol’ means ‘one’.','‘agua’ means ‘house’.'];
+const C0={teal:'#0E7C7B',coral:'#E4572E',purple:'#6C4AB6',amber:'#B7791F',ink:'#1A1A1A',muted:'#4F5A63',line:'#C9D0D5',bg:'#F2F4F5',grey:'#9AA3AB',tealLt:'#DCEEED',purpleLt:'#EAE3F7',amberLt:'#FDF1D6',blue:'#2F6FA8'};
+const BASE=D.X.map(p=>p.slice());
+let X=BASE.map(p=>p.slice());
+/* ---------------- maths ---------------- */
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+const U=d=>{const r=d*Math.PI/180;return [Math.cos(r),Math.sin(r)];};
+const mean=A=>[A.reduce((s,p)=>s+p[0],0)/A.length,A.reduce((s,p)=>s+p[1],0)/A.length];
+function centre(A){const m=mean(A);return A.map(p=>[p[0]-m[0],p[1]-m[1]]);}
+function cov(A){const n=A.length;let a=0,b=0,c=0;A.forEach(p=>{a+=p[0]*p[0];b+=p[0]*p[1];c+=p[1]*p[1];});return [[a/(n-1),b/(n-1)],[b/(n-1),c/(n-1)]];}
+const variance=v=>{const m=v.reduce((s,x)=>s+x,0)/v.length;return v.reduce((s,x)=>s+(x-m)**2,0)/(v.length-1);};
+function eig(C){const a=C[0][0],b=C[0][1],d=C[1][1];const tr=a+d,det=a*d-b*b,disc=Math.sqrt(Math.max(0,tr*tr/4-det));const l1=tr/2+disc,l2=tr/2-disc;
+  let v1=Math.abs(b)>1e-9?[l1-d,b]:(a>=d?[1,0]:[0,1]);const n=Math.hypot(...v1);v1=[v1[0]/n,v1[1]/n];if(v1[0]<0||(Math.abs(v1[0])<1e-9&&v1[1]<0))v1=[-v1[0],-v1[1]];const v2=[-v1[1],v1[0]];return {l:[l1,l2],v:[v1,v2]};}
+const angOf=v=>{let a=Math.atan2(v[1],v[0])*180/Math.PI;while(a<0)a+=180;while(a>=180)a-=180;return a;};
+const spreadAt=d=>variance(X.map(p=>dot(p,U(d))));
+/* ---------------- svg helpers ---------------- */
+const NS='http://www.w3.org/2000/svg';const st=document.getElementById('st');
+function el(t,a,p,txt){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!==undefined)e.textContent=txt;(p||st).appendChild(e);return e;}
+function clear(){while(st.firstChild)st.removeChild(st.firstChild);const d=el('defs',{});for(const [k,c] of Object.entries(C0)){const m=el('marker',{id:'a-'+k,viewBox:'0 0 10 10',refX:'8',refY:'5',markerWidth:'4.5',markerHeight:'4.5',orient:'auto-start-reverse'},d);el('path',{d:'M0,0 L10,5 L0,10 z',fill:c},m);}}
+function arrow(x1,y1,x2,y2,c,w=6,extra={}){return el('line',Object.assign({x1,y1,x2,y2,stroke:C0[c]||c,'stroke-width':w,'marker-end':`url(#a-${c})`,'stroke-linecap':'round'},extra));}
+function txt(x,y,s,size=30,fill=C0.ink,extra={}){return el('text',Object.assign({x,y,'font-size':size,fill},extra),st,s);}
+/* plane on the left */
+const PX=420,PY=380,SC=150;const MX=x=>PX+x*SC,MY=y=>PY-y*SC;const IX=px=>(px-PX)/SC,IY=py=>(PY-py)/SC;
+function axesFaint(){el('line',{x1:MX(-2.7),y1:MY(0),x2:MX(2.7),y2:MY(0),stroke:C0.line,'stroke-width':2});el('line',{x1:MX(0),y1:MY(-2.35),x2:MX(0),y2:MY(2.35),stroke:C0.line,'stroke-width':2});
+  txt(MX(2.65),MY(0)+30,'number 1',20,C0.muted,{'text-anchor':'end'});txt(MX(0)+10,MY(2.3),'number 2',20,C0.muted);}
+function dotsDraw(o={}){X.forEach((p,i)=>{const c=o.colour?(D.T[i]?C0.teal:C0.coral):C0.purple;const r=o.r||13;
+  if(o.shape&&D.TOP[i])el('rect',{x:MX(p[0])-r,y:MY(p[1])-r,width:2*r,height:2*r,fill:c,opacity:o.alpha||1,stroke:'#fff','stroke-width':2});
+  else el('circle',{cx:MX(p[0]),cy:MY(p[1]),r,fill:c,opacity:o.alpha||1,stroke:'#fff','stroke-width':2});});}
+function rulerDraw(d,c=C0.ink,w=12,L=2.6,ticks=true){const u=U(d);el('line',{x1:MX(-L*u[0]),y1:MY(-L*u[1]),x2:MX(L*u[0]),y2:MY(L*u[1]),stroke:c,'stroke-width':w,'stroke-linecap':'round',opacity:0.9});
+  if(ticks){const n=[-u[1],u[0]];for(let k=-2.5;k<=2.51;k+=0.5){const h=(Math.abs(k%1)>0.01?0.04:0.08);const p=[k*u[0],k*u[1]];el('line',{x1:MX(p[0]-h*n[0]),y1:MY(p[1]-h*n[1]),x2:MX(p[0]+h*n[0]),y2:MY(p[1]+h*n[1]),stroke:'#fff','stroke-width':3});}}}
+function dropsDraw(d,c=C0.amber){const u=U(d);X.forEach(p=>{const s=dot(p,u);const q=[s*u[0],s*u[1]];el('line',{x1:MX(p[0]),y1:MY(p[1]),x2:MX(q[0]),y2:MY(q[1]),stroke:c,'stroke-width':2.5,'stroke-dasharray':'5 5'});el('circle',{cx:MX(q[0]),cy:MY(q[1]),r:6,fill:c});});}
+/* right panel helpers */
+const RX=860,RW=680;
+function numberLine(y,vals,colors,label,shapes){const nx=v=>RX+RW/2+v*(RW/6);el('line',{x1:RX,y1:y,x2:RX+RW,y2:y,stroke:C0.ink,'stroke-width':3});
+  for(let k=-3;k<=3;k++){el('line',{x1:nx(k),y1:y-12,x2:nx(k),y2:y+12,stroke:C0.ink,'stroke-width':2});txt(nx(k),y+44,String(k).replace('-','−'),22,C0.muted,{'text-anchor':'middle'});}
+  vals.forEach((v,i)=>{const c=colors?colors[i]:C0.amber;if(shapes&&shapes[i])el('rect',{x:nx(v)-12,y:y-12,width:24,height:24,fill:c,opacity:0.75});else el('circle',{cx:nx(v),cy:y,r:13,fill:c,opacity:0.7});});
+  if(label)txt(RX,y-40,label,26,C0.muted);}
+function meter(y,v,vmax,c,label){el('rect',{x:RX,y,width:RW,height:54,rx:10,fill:'#fff',stroke:C0.line,'stroke-width':2});el('rect',{x:RX,y,width:Math.max(0,RW*v/vmax),height:54,rx:10,fill:c});
+  txt(RX,y-14,label,26,C0.muted);txt(RX+RW,y-14,v.toFixed(2),30,c,{'text-anchor':'end','font-weight':'bold'});}
+function oval(C,stroke=C0.coral,w=6,r=2){const E=eig(C);let d='';for(let k=0;k<=360;k+=4){const t=k*Math.PI/180;const a=r*Math.sqrt(Math.max(E.l[0],1e-6))*Math.cos(t),b=r*Math.sqrt(Math.max(E.l[1],1e-6))*Math.sin(t);const x=a*E.v[0][0]+b*E.v[1][0],y=a*E.v[0][1]+b*E.v[1][1];d+=(k?'L':'M')+MX(x)+','+MY(y);}el('path',{d:d+'Z',fill:'none',stroke,'stroke-width':w});}
+/* ---------------- state ---------------- */
+let ang=15, anim=null;
+function sweepTo(target,dur=900,done){if(anim)cancelAnimationFrame(anim);const a0=ang;let t0=null;const f=t=>{if(!t0)t0=t;const q=Math.min(1,(t-t0)/dur);ang=a0+(target-a0)*(1-Math.pow(1-q,3));render();if(q<1)anim=requestAnimationFrame(f);else{anim=null;done&&done();}};anim=requestAnimationFrame(f);}
+function sweepAll(done){if(anim)cancelAnimationFrame(anim);let t0=null;const best=angOf(eig(cov(X)).v[0]);const f=t=>{if(!t0)t0=t;const q=Math.min(1,(t-t0)/3600);ang=q*180;seen[Math.round(ang)]=spreadAt(ang);render();if(q<1)anim=requestAnimationFrame(f);else{anim=null;sweepTo(best,700,done);}};anim=requestAnimationFrame(f);}
+let seen={};
+/* drag on stage turns the ruler */
+let dragging=false;
+function stagePt(e){const p=st.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(st.getScreenCTM().inverse());}
+st.addEventListener('pointerdown',e=>{const q=stagePt(e);if(q.x<820&&SCN().drag){dragging=true;st.setPointerCapture(e.pointerId);turnTo(q);}});
+st.addEventListener('pointermove',e=>{if(dragging)turnTo(stagePt(e));});
+st.addEventListener('pointerup',()=>dragging=false);
+function turnTo(q){let a=Math.atan2(IY(q.y),IX(q.x))*180/Math.PI;while(a<0)a+=180;while(a>=180)a-=180;ang=a;seen[Math.round(a)]=spreadAt(a);if(anim){cancelAnimationFrame(anim);anim=null;}render();}
+/* ---------------- 3-D egg for the jump ---------------- */
+const EGG=(()=>{let s=9;const r=()=>{s=(s*16807)%2147483647;return s/2147483647;};const g=()=>Math.sqrt(-2*Math.log(r()+1e-9))*Math.cos(2*Math.PI*r());const P=[];for(let i=0;i<260;i++)P.push([g()*1.5,g()*0.6,g()*0.35]);return P;})();
+let eggT=0;
+/* ---------------- scenes ---------------- */
+const SECTIONS=[
+ {id:'ruler',title:'1 · A ruler through the cloud',steps:[
+   {say:'Each dot is one statement — pretend it has just 2 numbers. 20 statements = a cloud.',s:{ruler:false}},
+   {say:'Lay a ruler through the middle of the cloud.',s:{ruler:true},f:()=>sweepTo(15)},
+   {say:'Slide every dot straight onto the ruler.',s:{ruler:true,drops:true}},
+   {say:'Where it lands = its READING. One number per statement.',s:{ruler:true,drops:true,readings:true,pick:true}},
+   {say:'All 20 readings on one line. Drag on the picture to turn the ruler and watch them move.',s:{ruler:true,drops:true,readings:true},drag:true}]},
+ {id:'good',title:'2 · A good ruler and a bad ruler',steps:[
+   {say:'Along the cloud: the readings SPREAD OUT — statements still look different.',s:{ruler:true,drops:true,readings:true,meter:true},f:()=>sweepTo(angOf(eig(cov(X)).v[0]))},
+   {say:'Across the cloud: the readings BUNCH UP — everyone looks the same.',s:{ruler:true,drops:true,readings:true,meter:true},f:()=>sweepTo(angOf(eig(cov(X)).v[1]))},
+   {say:'Your turn: drag to turn the ruler. The bar = how spread out the readings are.',s:{ruler:true,drops:true,readings:true,meter:true},drag:true}]},
+ {id:'pc1',title:'3 · Turn the ruler → PC1',steps:[
+   {say:'Turn the ruler all the way round and record the spread for every position.',s:{ruler:true,meter:true,curve:true},f:()=>{seen={};sweepAll();}},
+   {say:'The ruler with the MOST spread is PC1. No labels were used — only the dots.',s:{ruler:true,meter:true,curve:true,best:true},drag:true,f:()=>{for(let k=0;k<=180;k++)seen[k]=spreadAt(k);if(!anim)ang=angOf(eig(cov(X)).v[0]);}}]},
+ {id:'colour',title:'4 · Now add colour',steps:[
+   {say:'Colour the dots only now: teal = true, red = false.',s:{ruler:true,colour:true},f:()=>sweepTo(angOf(eig(cov(X)).v[0]))},
+   {say:'On PC1, all false statements read low and all true ones read high. PCA never saw the colours.',s:{ruler:true,colour:true,drops:true,readings:true}}]},
+ {id:'pc2',title:'5 · PC2 and how much each explains',steps:[
+   {say:'PC2 = the best ruler crossing PC1 like a plus sign.',s:{pc1line:true,pc2line:true,colour:true,shape:true}},
+   {say:'Its readings split cities (●) from translations (■): the topic — what PC1 missed.',s:{pc1line:true,pc2line:true,colour:true,shape:true,pc2read:true}},
+   {say:'Of all the differences, PC1 carries about 90%, PC2 the rest. Notebook: “explained variance”.',s:{pc1line:true,pc2line:true,colour:true,shape:true,share:true}}]},
+ {id:'oval',title:'6 · The shortcut: the cloud is an oval',steps:[
+   {say:'Turning a ruler is fine for 2 numbers — hopeless for 5120. Look at the SHAPE instead.',s:{}},
+   {say:'The cloud is an OVAL. The oval already knows where the best ruler is.',s:{oval:true}}]},
+ {id:'C',title:'7 · The covariance matrix = numbers for the oval',steps:[
+   {say:'Top-left: how wide left–right. Bottom-right: how wide up–down.',s:{oval:true,cells:true,hl:'d'}},
+   {say:'The other two cells (same number twice): do the two numbers lean together? + leans ↗, − leans ↘.',s:{oval:true,cells:true,hl:'o'}},
+   {say:'Try other clouds — round, wide, leaning the other way. Watch the oval and C change together.',s:{oval:true,cells:true,presets:true}},
+   {say:'With 5120 numbers, C has a row and a column for every number: 5120 × 5120.',s:{oval:true,cells:true},f:()=>setCloud('ours')}]},
+ {id:'eig',title:'8 · PC1 = the oval’s long side',steps:[
+   {say:'The oval’s long side = PC1. Its short side = PC2.',s:{oval:true,sides:true}},
+   {say:'Maths names: these sides are C’s EIGENVECTORS; how far they stretch = EIGENVALUES.',s:{oval:true,sides:true,eiglabels:true}},
+   {say:'Check it: drag the ruler. The spread is biggest exactly when it lies on the long side.',s:{oval:true,sides:true,ruler:true,meter:true},drag:true}]},
+ {id:'jump',title:'9 · The one jump: 5120 numbers',steps:[
+   {say:'2 numbers per statement → the cloud is an oval.',s:{jump:1}},
+   {say:'3 numbers → an egg. Its longest direction is still PC1.',s:{jump:2}},
+   {say:'5120 numbers → can’t draw it, same recipe: C is 5120 × 5120, PC1 = its longest direction.',s:{jump:3}}]},
+ {id:'act',curious:true,title:'10 · For the curious: what IS a dot? (an activation)',steps:[
+   {say:'Start from one statement. The model splits it into tokens and runs all its blocks over them.',s:{act:0}},
+   {say:'We read only at the final “.” — where the statement is complete.',s:{act:1}},
+   {say:'After block 14, the stream at “.” is ONE list of 5120 numbers: the activation vector.',s:{act:2}},
+   {say:'For the picture we keep just 2 of the 5120 numbers → one dot on a page.',s:{act:3}},
+   {say:'Do that for every statement → the cloud. (Real PCA uses all 5120 numbers at once.)',s:{act:4}}]},
+ {id:'covd',curious:true,title:'11 · For the curious: what covariance actually measures',steps:[
+   {say:'For each dot, multiply its two numbers. That is the area of the rectangle from the centre to the dot.',s:{covd:1},f:()=>{covPreset='ours';}},
+   {say:'Top-right and bottom-left rectangles count +; top-left and bottom-right count −.',s:{covd:2}},
+   {say:'Covariance = the average signed area. Big + → the two numbers rise together.',s:{covd:3}},
+   {say:'Careful: it only detects a STRAIGHT-LINE lean. Try the ring and the U-shape — clear structure, covariance ≈ 0.',s:{covd:4}}]},
+ {id:'heat',curious:true,title:'12 · For the curious: C in many dimensions',steps:[
+   {say:'With many dimensions, C is a grid: one cell for every PAIR. Hover a cell to see that pair as a scatter.',s:{heat:1}},
+   {say:'Diagonal cells = one dimension’s own spread. Off-diagonal = how two dimensions vary together. 5120 × 5120 in the notebook.',s:{heat:1},f:()=>{cell=[2,2];}}]},
+ {id:'ucu',curious:true,title:'13 · For the curious: C gives the spread along ANY ruler',steps:[
+   {say:'Route 1: slide the dots onto the ruler and take the variance of the readings. Drag the ruler.',s:{ucu:1},drag:true},
+   {say:'Route 2: plug the ruler into C: uᵀCu. Same number — without touching the dots.',s:{ucu:2},drag:true},
+   {say:'Why: a reading is a dot product, so the average squared reading only needs averages of products — that is C.',s:{ucu:3},drag:true}]},
+ {id:'opt',curious:true,title:'14 · For the curious: the optimisation → eigenvector',steps:[
+   {say:'PCA’s problem: find the ruler u (length 1) that makes the spread uᵀCu as big as possible. Amber shape = spread in every direction.',s:{opt:1},f:()=>{optU=U(160);}},
+   {say:'Which way is uphill? For uᵀCu it is 2Cu (purple).',s:{opt:2},f:()=>{optU=U(160);}},
+   {say:'But u must stay on the circle, so only the part of 2Cu ALONG the circle (red) helps. Step that way.',s:{opt:3},f:()=>{optU=U(160);}},
+   {say:'Keep stepping: red shrinks to zero when 2Cu points straight out along u. That means Cu = λu — an eigenvector — and its spread is λ.',s:{opt:4},f:()=>playOpt()}]},
+ {id:'formula',curious:true,title:'15 · For the curious: how C is computed (hover a dot)',steps:[
+   {say:'Each dot: multiply its numbers. width ↔ = average of (number 1)², width ↕ = average of (number 2)², lean = average of number 1 × number 2.',s:{formula:true}},
+   {say:'Hover a dot to see its products. Formula: C = Xcᵀ Xc ÷ (n − 1) — the notebook’s line.',s:{formula:true}}]},
+ {id:'proof',curious:true,title:'16 · For the curious: why the long side wins (proof)',steps:[
+   {say:'Split any ruler into a PC1 part (a) and a PC2 part (b). They are at right angles, so a² + b² = 1.',s:{proof:1},drag:true},
+   {say:'Spread = a² × λ₁ + b² × λ₂ — a weighted average of the two eigenvalues. Drag the ruler.',s:{proof:2},drag:true},
+   {say:'An average can never beat its biggest ingredient → the most spread is λ₁, only when the ruler IS PC1.',s:{proof:2},drag:true,f:()=>sweepTo(angOf(eig(cov(X)).v[0]))}]},
+ {id:'mult',curious:true,title:'17 · For the curious: how the computer finds it (× C)',steps:[
+   {say:'Start with any ruler. Multiply it by C — C pulls it toward the long side.',s:{mult:true},f:()=>{multHist=[U(160)];}},
+   {say:'Again and again: it swings onto PC1 and stops. (“power iteration”; eigh is a faster cousin.)',s:{mult:true},f:()=>{multHist=[U(160)];let k=0;const go=()=>{if(k++<6){multStep();render();setTimeout(go,550);}};go();}}]}
+];
+let sec=0,stp=0;const SCN=()=>SECTIONS[sec].steps[stp];
+let multHist=[U(160)];
+function multStep(){const C=cov(X);const u=multHist[multHist.length-1];let w=[C[0][0]*u[0]+C[0][1]*u[1],C[1][0]*u[0]+C[1][1]*u[1]];const n=Math.hypot(...w);multHist.push([w[0]/n,w[1]/n]);}
+/* presets */
+const PRESETS={ours:BASE,round:null,wide:null,down:null};
+function setCloud(k){if(k==='ours')X=BASE.map(p=>p.slice());
+  else{const E=eig(cov(BASE));X=BASE.map(p=>{const a=dot(p,E.v[0])/Math.sqrt(E.l[0]),b=dot(p,E.v[1])/Math.sqrt(E.l[1]);
+    if(k==='round')return [a*1.1,b*1.1]; if(k==='wide')return [a*1.7,b*0.45]; if(k==='down'){const s1=1.6,s2=0.55;const v1=U(-37),v2=U(53);return [a*s1*v1[0]+b*s2*v2[0],a*s1*v1[1]+b*s2*v2[1]];}});
+    X=centre(X);}
+  render();}
+/* ================= v19: extra "for the curious" scenes ================= */
+const TOKS=['<s>','The','city','of','Paris','is','in','France','.'];
+let actStep=0;
+function renderAct(k){
+  // token strip
+  const x0=60,tw=150;TOKS.forEach((t,i)=>{const x=x0+i*tw;el('rect',{x,y:40,width:tw-10,height:60,rx:10,fill:i===8&&k>=1?C0.amberLt:C0.bg,stroke:i===8&&k>=1?C0.amber:'none','stroke-width':3});txt(x+(tw-10)/2,80,t,26,C0.ink,{'text-anchor':'middle','font-family':'Courier New'});});
+  txt(60,140,'one statement → tokens → the model runs 40 blocks over them',24,C0.muted);
+  if(k>=1){// block tower above "."
+    const bx=x0+8*tw;for(let b=0;b<8;b++){el('rect',{x:bx,y:170+b*34,width:tw-10,height:28,rx:6,fill:b===4&&k>=2?C0.purple:'#E3E7EA'});}
+    txt(bx-14,190,'block 40',20,C0.muted,{'text-anchor':'end'});txt(bx-14,425,'block 1',20,C0.muted,{'text-anchor':'end'});
+    if(k>=2){txt(bx-14,320,'block 14 →',22,C0.purple,{'text-anchor':'end','font-weight':'bold'});}}
+  if(k>=2){// barcode of 5120 numbers
+    let s=3;const r=()=>{s=(s*16807)%2147483647;return s/2147483647;};const y=470;txt(60,y,'the stream at “.” after block 14 = ONE list of 5120 numbers:',24,C0.ink,{'font-weight':'bold'});
+    for(let i=0;i<120;i++){const v=(r()-0.5)*2;el('rect',{x:60+i*8,y:y+20,width:7,height:60,fill:v>0?C0.teal:C0.coral,opacity:Math.abs(v)*0.9+0.1});}
+    txt(60+120*8+12,y+60,'… (5120)',22,C0.muted);
+    if(k>=3){el('rect',{x:60,y:y+16,width:15,height:68,fill:'none',stroke:C0.ink,'stroke-width':3});el('rect',{x:68,y:y+16,width:15,height:68,fill:'none',stroke:C0.ink,'stroke-width':3});
+      txt(60,y+125,'keep just 2 of them → (number 1, number 2) → one DOT on a page',26,C0.purple,{'font-weight':'bold'});}}
+  if(k>=4){// mini scatter
+    const cx=1310,cy=580,s=45;el('rect',{x:1160,y:470,width:300,height:220,rx:14,fill:'#fff',stroke:C0.line,'stroke-width':2});
+    X.forEach((p,i)=>el('circle',{cx:cx+p[0]*s,cy:cy-p[1]*s,r:i===0?11:6,fill:i===0?C0.amber:C0.purple,opacity:i===0?1:0.6}));
+    txt(1310,720,'every statement = one dot',22,C0.ink,{'text-anchor':'middle','font-weight':'bold'});txt(1310,748,'cities: 1,496 dots = the cloud',22,C0.muted,{'text-anchor':'middle'});}
+}
+/* covariance detail */
+let covPreset='ours';
+function covData(){const B=BASE;if(covPreset==='ours')return B.map(p=>p.slice());
+  let s=5;const r=()=>{s=(s*16807)%2147483647;return s/2147483647;};const g=()=>Math.sqrt(-2*Math.log(r()+1e-9))*Math.cos(2*Math.PI*r());
+  if(covPreset==='ring'){const P=[];for(let i=0;i<20;i++){const a=i/20*2*Math.PI;P.push([1.6*Math.cos(a)+g()*0.1,1.6*Math.sin(a)+g()*0.1]);}return centre(P);}
+  if(covPreset==='down')return B.map(p=>[p[0],-p[1]]);
+  if(covPreset==='round'){const P=[];for(let i=0;i<20;i++)P.push([g()*1.1,g()*1.1]);return centre(P);}
+  if(covPreset==='curve'){const P=[];for(let i=0;i<20;i++){const x=-2+4*i/19;P.push([x,0.55*x*x-1.2+g()*0.1]);}return centre(P);}}
+function renderCovD(k){const P=covData();const n=P.length;const prods=P.map(p=>p[0]*p[1]);const cv=prods.reduce((a,b)=>a+b,0)/(n-1);
+  axesFaint();
+  if(k>=1)P.forEach((p,i)=>{const v=prods[i];const c=v>=0?C0.amber:C0.blue;el('rect',{x:Math.min(MX(0),MX(p[0])),y:Math.min(MY(0),MY(p[1])),width:Math.abs(p[0])*SC,height:Math.abs(p[1])*SC,fill:c,opacity:k>=2?0.16:0.07,stroke:c,'stroke-width':k>=2?1.5:0.6});});
+  if(k>=2){txt(MX(1.3),MY(2.25),'+ × + = +',26,C0.amber,{'font-weight':'bold','text-anchor':'middle'});txt(MX(-1.3),MY(-2.0),'− × − = +',26,C0.amber,{'font-weight':'bold','text-anchor':'middle'});
+    txt(MX(-1.3),MY(2.25),'− × + = −',26,C0.blue,{'font-weight':'bold','text-anchor':'middle'});txt(MX(1.3),MY(-2.0),'+ × − = −',26,C0.blue,{'font-weight':'bold','text-anchor':'middle'});}
+  P.forEach(p=>el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:11,fill:C0.purple,stroke:'#fff','stroke-width':2}));
+  // right panel
+  txt(RX,90,'each dot: (number 1) × (number 2)',30,C0.ink,{'font-weight':'bold'});
+  txt(RX,140,'= the area of its rectangle to the centre (signed)',26,C0.muted);
+  if(k>=2){const pos=prods.filter(v=>v>0).reduce((a,b)=>a+b,0),neg=prods.filter(v=>v<0).reduce((a,b)=>a+b,0);
+    txt(RX,215,`amber (+) areas: ${pos.toFixed(1)}`,30,C0.amber,{'font-weight':'bold'});txt(RX,265,`blue (−) areas: ${neg.toFixed(1).replace('-','−')}`,30,C0.blue,{'font-weight':'bold'});}
+  if(k>=3){el('rect',{x:RX,y:300,width:RW,height:130,rx:16,fill:C0.amberLt});txt(RX+20,350,'covariance = (sum of signed areas) ÷ (n − 1)',26,C0.ink);
+    txt(RX+20,410,`= ${cv.toFixed(2).replace('-','−')}`,46,cv>0.05?C0.amber:(cv<-0.05?C0.blue:C0.muted),{'font-weight':'bold','font-family':'Courier New'});
+    txt(RX,480,cv>0.05?'positive → the two numbers rise together (↗)':(cv<-0.05?'negative → one up, the other down (↘)':'≈ 0 → no straight-line lean'),28,C0.ink,{'font-weight':'bold'});}
+  if(k>=4){txt(RX,545,'It only sees a STRAIGHT-LINE lean: a ring or a',24,C0.coral,{'font-weight':'bold'});txt(RX,575,'U-shape can have covariance ≈ 0. Try them:',24,C0.coral,{'font-weight':'bold'});
+    [['ours','ours'],['down','leans ↘'],['round','round'],['ring','ring'],['curve','U-shape']].forEach(([key,l],i)=>{const x=RX+i*136,y=610;const gg=el('g',{style:'cursor:pointer'});
+      el('rect',{x,y,width:126,height:64,rx:12,fill:covPreset===key?C0.teal:'#fff',stroke:C0.teal,'stroke-width':3},gg);el('text',{x:x+63,y:y+42,'font-size':22,'text-anchor':'middle','font-weight':'bold',fill:covPreset===key?'#fff':C0.teal},gg,l);
+      gg.addEventListener('click',()=>{covPreset=key;render();});});}
+}
+/* C in many dims: heat map, click a cell */
+const HD=(()=>{let s=9;const r=()=>{s=(s*16807)%2147483647;return s/2147483647;};const g=()=>Math.sqrt(-2*Math.log(r()+1e-9))*Math.cos(2*Math.PI*r());
+  const d=10,n=80;const f1=Array.from({length:d},()=>g()*0.9),f2=Array.from({length:d},()=>g()*0.7);const P=[];
+  for(let i=0;i<n;i++){const a=g(),b=g();P.push(Array.from({length:d},(_,j)=>a*f1[j]+b*f2[j]+g()*0.5));}
+  const m=Array(d).fill(0);P.forEach(p=>p.forEach((v,j)=>m[j]+=v/n));const Pc=P.map(p=>p.map((v,j)=>v-m[j]));
+  const C=Array.from({length:d},(_,i)=>Array.from({length:d},(_,j)=>Pc.reduce((a,p)=>a+p[i]*p[j],0)/(n-1)));return {P:Pc,C,d};})();
+let cell=[0,3];
+function renderHeat(){const {P,C,d}=HD;const x0=60,y0=60,c=58;const mx=Math.max(...C.flat().map(Math.abs));
+  for(let i=0;i<d;i++)for(let j=0;j<d;j++){const v=C[i][j];const col=i===j?C0.purple:(v>0?C0.amber:C0.blue);const g=el('g',{style:'cursor:pointer'});
+    el('rect',{x:x0+j*c,y:y0+i*c,width:c-4,height:c-4,rx:6,fill:col,opacity:0.12+0.85*Math.abs(v)/mx,stroke:(cell[0]===i&&cell[1]===j)?C0.ink:'none','stroke-width':4},g);
+    g.addEventListener('mouseenter',()=>{cell=[i,j];render();});g.addEventListener('click',()=>{cell=[i,j];render();});}
+  for(let i=0;i<d;i++){txt(x0-10,y0+i*c+36,'d'+(i+1),18,C0.muted,{'text-anchor':'end'});txt(x0+i*c+27,y0+d*c+24,'d'+(i+1),18,C0.muted,{'text-anchor':'middle'});}
+  txt(60,y0+d*c+70,'10 dimensions drawn — the notebook has 5120 (26 million cells)',22,C0.muted);
+  const [a,b]=cell;const cx=1150,cy=330,s=55;el('rect',{x:830,y:60,width:640,height:540,rx:16,fill:'#fff',stroke:C0.line,'stroke-width':2});
+  el('line',{x1:850,y1:cy,x2:1450,y2:cy,stroke:C0.line,'stroke-width':2});el('line',{x1:cx,y1:80,x2:cx,y2:580,stroke:C0.line,'stroke-width':2});
+  if(a===b){P.forEach(p=>el('circle',{cx:cx+p[a]*s,cy:cy,r:7,fill:C0.purple,opacity:0.5}));txt(cx,560,`d${a+1} alone: its spread (variance) = ${C[a][a].toFixed(2)}`,26,C0.purple,{'text-anchor':'middle','font-weight':'bold'});}
+  else{P.forEach(p=>el('circle',{cx:cx+p[b]*s,cy:cy-p[a]*s,r:6,fill:C0.purple,opacity:0.55}));txt(1440,cy-10,'d'+(b+1),22,C0.muted,{'text-anchor':'end'});txt(cx+8,100,'d'+(a+1),22,C0.muted);
+    const v=C[a][b];txt(cx,560,`cell (d${a+1}, d${b+1}) = ${v.toFixed(2).replace('-','−')} → ${v>0.15?'they rise together ↗':(v<-0.15?'one up, other down ↘':'barely linked')}`,26,v>0.15?C0.amber:(v<-0.15?C0.blue:C0.muted),{'text-anchor':'middle','font-weight':'bold'});}
+  txt(830,650,'hover any cell → that PAIR of dimensions as a scatter',24,C0.ink,{'font-weight':'bold'});txt(830,690,'C = how every dimension varies with every other one',24,C0.muted);}
+/* u^T C u = spread */
+function renderUCU(k){axesFaint();dotsDraw({alpha:0.85,r:11});rulerDraw(ang);dropsDraw(ang);const C=cov(X);const u=U(ang);
+  const rd=X.map(p=>dot(p,u));const v1=variance(rd);const v2=u[0]*u[0]*C[0][0]+2*u[0]*u[1]*C[0][1]+u[1]*u[1]*C[1][1];
+  const f=x=>x.toFixed(2).replace('-','−');
+  el('rect',{x:RX,y:60,width:RW,height:140,rx:16,fill:C0.bg});txt(RX+20,110,'route 1 · from the 20 dots:',26,C0.muted);txt(RX+20,170,`variance of the readings = ${f(v1)}`,32,C0.ink,{'font-weight':'bold'});
+  if(k>=2){el('rect',{x:RX,y:220,width:RW,height:180,rx:16,fill:C0.purpleLt});txt(RX+20,270,'route 2 · from C alone (no dots):',26,C0.muted);
+    txt(RX+20,325,`uᵀCu = ${f(C[0][0])}·${f(u[0])}² + 2·${f(C[0][1])}·${f(u[0])}·${f(u[1])} + ${f(C[1][1])}·${f(u[1])}²`,24,C0.ink);txt(RX+20,375,`= ${f(v2)}`,36,C0.purple,{'font-weight':'bold'});}
+  if(k>=3){el('rect',{x:RX,y:420,width:RW,height:270,rx:16,fill:C0.tealLt});const L=['why they match:','reading of dot k = xₖ · u','spread = Σ (xₖ·u)² ÷ (n−1)','= uᵀ ( Σ xₖxₖᵀ ÷ (n−1) ) u','= uᵀ C u   ← C is the bracket'];
+    L.forEach((l,i)=>txt(RX+20,465+i*50,l,i?28:24,i?C0.teal:C0.muted,{'font-weight':i?'bold':'normal','font-family':i?'Courier New':'inherit'}));}
+}
+/* optimisation on the circle */
+let optU=U(160),optHist=[];
+function renderOpt(k){axesFaint();dotsDraw({alpha:0.25,r:8});const C=cov(X),E=eig(C);const R=1.9;
+  // unit circle of rulers + polar spread curve
+  el('circle',{cx:MX(0),cy:MY(0),r:1.6*SC,fill:'none',stroke:C0.ink,'stroke-width':1.5,'stroke-dasharray':'6 6'});
+  let d='';for(let a=0;a<=360;a+=3){const u=U(a);const v=u[0]*u[0]*C[0][0]+2*u[0]*u[1]*C[0][1]+u[1]*u[1]*C[1][1];const rr=0.35+v/E.l[0]*1.55;d+=(a?'L':'M')+MX(u[0]*rr)+','+MY(u[1]*rr);}
+  el('path',{d:d+'Z',fill:C0.amber,'fill-opacity':0.12,stroke:C0.amber,'stroke-width':3});
+  txt(MX(E.v[0][0]*1.95)+10,MY(E.v[0][1]*1.95),'most spread',22,C0.amber,{'font-weight':'bold'});
+  const u=optU;const Cu=[C[0][0]*u[0]+C[0][1]*u[1],C[1][0]*u[0]+C[1][1]*u[1]];const g=[2*Cu[0],2*Cu[1]];const along=dot(g,u);const tang=[g[0]-along*u[0],g[1]-along*u[1]];
+  arrow(MX(0),MY(0),MX(u[0]*1.0*1.6),MY(u[1]*1.0*1.6),'ink',6);txt(MX(u[0]*1.75),MY(u[1]*1.75),'u',30,C0.ink,{'font-weight':'bold'});
+  const gs=0.16;const tip=[u[0]*1.6,u[1]*1.6];
+  if(k>=2){arrow(MX(tip[0]),MY(tip[1]),MX(tip[0]+g[0]*gs),MY(tip[1]+g[1]*gs),'purple',5);txt(MX(tip[0]+g[0]*gs)+8,MY(tip[1]+g[1]*gs),'uphill: 2Cu',24,C0.purple,{'font-weight':'bold'});}
+  if(k>=3){arrow(MX(tip[0]),MY(tip[1]),MX(tip[0]+tang[0]*gs),MY(tip[1]+tang[1]*gs),'coral',5);txt(MX(tip[0]+tang[0]*gs)+8,MY(tip[1]+tang[1]*gs)+28,'part along the circle',22,C0.coral,{'font-weight':'bold'});}
+  // right text
+  const sp=u[0]*u[0]*C[0][0]+2*u[0]*u[1]*C[0][1]+u[1]*u[1]*C[1][1];const angle=Math.acos(Math.min(1,Math.abs(dot(Cu,u))/Math.hypot(...Cu)))*180/Math.PI;
+  const lines=[['goal: make uᵀCu as BIG as possible',C0.ink,true],['rule: u must stay length 1 (on the circle)',C0.muted,false]];
+  if(k>=2)lines.push(['uphill direction of uᵀCu is 2Cu',C0.purple,true]);
+  if(k>=3)lines.push(['only the part ALONG the circle can be used',C0.coral,true],['→ step u that way, shrink back to length 1',C0.coral,false]);
+  if(k>=4)lines.push(['stuck (top) when 2Cu points straight out:',C0.teal,true],['Cu = λu  → u is an EIGENVECTOR',C0.teal,true],['and the spread there = uᵀ(λu) = λ',C0.teal,false]);
+  lines.forEach(([t,c,b],i)=>txt(RX,90+i*52,t,27,c,{'font-weight':b?'bold':'normal'}));
+  el('rect',{x:RX,y:560,width:RW,height:120,rx:16,fill:C0.bg});txt(RX+20,610,`spread uᵀCu = ${sp.toFixed(2)}   (max λ₁ = ${E.l[0].toFixed(2)})`,26,C0.ink,{'font-weight':'bold'});
+  txt(RX+20,660,`angle between Cu and u: ${angle.toFixed(1)}°`,26,angle<1?C0.teal:C0.coral,{'font-weight':'bold'});
+  if(k>=4)txt(MX(-2.6),MY(-2.25),'(the “Lagrange multiplier” condition, in one picture)',20,C0.muted);
+}
+function optStep(){const C=cov(X);const u=optU;const Cu=[C[0][0]*u[0]+C[0][1]*u[1],C[1][0]*u[0]+C[1][1]*u[1]];const g=[2*Cu[0],2*Cu[1]];const along=dot(g,u);const t=[g[0]-along*u[0],g[1]-along*u[1]];
+  let v=[u[0]+0.12*t[0],u[1]+0.12*t[1]];const n=Math.hypot(...v);optU=[v[0]/n,v[1]/n];}
+function playOpt(){optU=U(160);let k=0;const f=()=>{if(k++<60&&SECTIONS[sec].id==='opt'){optStep();render();setTimeout(f,60);}};f();}
+
+/* ---------------- render ---------------- */
+function render(){clear();const S=SCN().s||{};const C=cov(X),E=eig(C);
+  if(S.jump){renderJump(S.jump);return;}
+  if(S.act!==undefined){renderAct(S.act);return;}
+  if(S.covd){renderCovD(S.covd);return;}
+  if(S.heat){renderHeat();return;}
+  if(S.ucu){renderUCU(S.ucu);return;}
+  if(S.opt){renderOpt(S.opt);return;}
+  if(S.formula){renderFormula();return;}
+  if(S.proof){renderProof(S.proof,C,E);return;}
+  if(S.mult){renderMult(C,E);return;}
+  axesFaint();
+  if(S.oval)oval(C);
+  if(S.pc1line){rulerDraw(angOf(E.v[0]),C0.teal,9,2.6,false);txt(MX(E.v[0][0]*2.55)+12,MY(E.v[0][1]*2.55),'PC1',34,C0.teal,{'font-weight':'bold'});}
+  if(S.pc2line){rulerDraw(angOf(E.v[1]),C0.purple,9,1.7,false);txt(MX(E.v[1][0]*1.75)-80,MY(E.v[1][1]*1.75),'PC2',34,C0.purple,{'font-weight':'bold'});}
+  if(S.ruler)rulerDraw(ang,S.best&&Math.abs(ang-angOf(E.v[0]))<1.5?C0.teal:C0.ink);
+  if(S.drops)dropsDraw(ang);
+  dotsDraw({colour:S.colour,shape:S.shape,alpha:(S.oval&&!S.cells?1:(S.sides||S.cells?0.55:1))});
+  if(S.sides){const L1=2*Math.sqrt(E.l[0]),L2=2*Math.sqrt(E.l[1]);arrow(MX(0),MY(0),MX(E.v[0][0]*L1),MY(E.v[0][1]*L1),'teal',9);arrow(MX(0),MY(0),MX(E.v[1][0]*L2),MY(E.v[1][1]*L2),'purple',9);
+    txt(MX(E.v[0][0]*L1)+14,MY(E.v[0][1]*L1),'PC1',36,C0.teal,{'font-weight':'bold'});txt(MX(E.v[1][0]*L2)-90,MY(E.v[1][1]*L2)-6,'PC2',36,C0.purple,{'font-weight':'bold'});}
+  if(S.pick){const u=U(ang),p=X[0],s=dot(p,u);el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:22,fill:'none',stroke:C0.amber,'stroke-width':4});
+    txt(RX,120,'“'+NAMES[0]+'”',32,C0.ink,{'font-weight':'bold'});txt(RX,180,'reading = '+s.toFixed(1).replace('-','−'),46,C0.amber,{'font-weight':'bold'});}
+  if(S.readings){const u=U(ang);numberLine(S.pick?420:330,X.map(p=>dot(p,u)),S.colour?X.map((p,i)=>D.T[i]?C0.teal:C0.coral):null,'the readings');
+    if(S.colour){txt(RX,250,'FALSE',44,C0.coral,{'font-weight':'bold'});txt(RX+RW,250,'TRUE',44,C0.teal,{'font-weight':'bold','text-anchor':'end'});}}
+  if(S.meter){const vmax=E.l[0]*1.05;meter(S.readings?560:200,spreadAt(ang),vmax,Math.abs(ang-angOf(E.v[0]))<2?C0.teal:C0.grey,'spread of the readings');}
+  if(S.curve){const gx=a=>RX+a*(RW/180),gy=v=>700-v*(360/(E.l[0]*1.1));el('line',{x1:RX,y1:700,x2:RX+RW,y2:700,stroke:C0.ink,'stroke-width':2});
+    txt(RX,330,'spread for every ruler position',24,C0.muted);const ks=Object.keys(seen).map(Number).sort((a,b)=>a-b);
+    if(ks.length>1){let d='';ks.forEach((k,i)=>d+=(i?'L':'M')+gx(k)+','+gy(seen[k]));el('path',{d,fill:'none',stroke:C0.purple,'stroke-width':5});}
+    el('circle',{cx:gx(ang),cy:gy(spreadAt(ang)),r:11,fill:C0.amber});
+    if(S.best){const b=angOf(E.v[0]);el('circle',{cx:gx(b),cy:gy(E.l[0]),r:14,fill:C0.teal});txt(gx(b)+20,gy(E.l[0])-10,'PC1 = most spread',30,C0.teal,{'font-weight':'bold'});}}
+  if(S.pc2read){numberLine(330,X.map(p=>dot(p,E.v[1])),X.map((p,i)=>D.T[i]?C0.teal:C0.coral),'readings on PC2',X.map((p,i)=>D.TOP[i]));
+    txt(RX,220,'● cities',36,C0.ink,{'font-weight':'bold'});txt(RX+RW,220,'translations ■',36,C0.ink,{'font-weight':'bold','text-anchor':'end'});}
+  if(S.share){const tot=E.l[0]+E.l[1];el('rect',{x:RX,y:300,width:RW*E.l[0]/tot,height:90,fill:C0.teal});el('rect',{x:RX+RW*E.l[0]/tot,y:300,width:RW*E.l[1]/tot,height:90,fill:C0.purple});
+    txt(RX+20,358,`PC1 ${Math.round(100*E.l[0]/tot)}%`,44,'#fff',{'font-weight':'bold'});txt(RX+RW,440,`PC2 ${Math.round(100*E.l[1]/tot)}%`,36,C0.purple,{'font-weight':'bold','text-anchor':'end'});
+    txt(RX,270,'all the differences between the statements',26,C0.muted);}
+  if(S.oval&&!S.cells&&!S.sides){txt(RX,300,'it is an',44,C0.ink);txt(RX,380,'OVAL',90,C0.coral,{'font-weight':'bold'});}
+  if(S.cells)renderCells(C,S.hl,S.presets);
+  if(S.eiglabels){el('rect',{x:RX,y:120,width:RW,height:250,rx:18,fill:C0.bg});
+    txt(RX+30,190,'sides = EIGENVECTORS of C',36,C0.ink,{'font-weight':'bold'});txt(RX+30,260,`stretch = EIGENVALUES: ${E.l[0].toFixed(2)} and ${E.l[1].toFixed(2)}`,30,C0.ink);
+    txt(RX+30,320,'(eigenvalue = spread of readings along it)',26,C0.muted);}
+}
+function renderCells(C,hl,presets){const x0=RX+60,y0=presets?110:170,s=230,g=16;
+  const cell=(i,j)=>{const d=i===j;const v=C[i][j];const x=x0+j*(s+g),y=y0+i*(s+g);const on=!hl||(hl==='d'&&d)||(hl==='o'&&!d);
+    const fill=d?C0.purpleLt:(v>0.05?C0.amberLt:(v<-0.05?'#DDE7F2':'#fff'));const col=d?C0.purple:(v>0.05?C0.amber:(v<-0.05?C0.blue:C0.muted));
+    el('rect',{x,y,width:s,height:s,rx:22,fill,stroke:on&&hl?C0.ink:'none','stroke-width':4,opacity:on?1:0.35});
+    txt(x+s/2,y+s/2+14,v.toFixed(1).replace('-','−'),72,col,{'text-anchor':'middle','font-weight':'bold',opacity:on?1:0.35});
+    txt(x+s/2,y+s-28,d?(i===0?'width ↔':'width ↕'):'lean together?',28,col,{'text-anchor':'middle','font-weight':'bold',opacity:on?1:0.35});};
+  txt(x0-70,y0+s+g/2+18,'C =',48,C0.ink,{'font-weight':'bold','text-anchor':'middle'});
+  cell(0,0);cell(0,1);cell(1,0);cell(1,1);
+  if(presets){const bs=[['ours','our cloud'],['round','round'],['wide','wide'],['down','leans ↘']];bs.forEach(([k,l],i)=>{const x=RX+i*172,y=640;const g_=el('g',{style:'cursor:pointer'});
+    el('rect',{x,y,width:160,height:70,rx:14,fill:'#fff',stroke:C0.teal,'stroke-width':3},g_);el('text',{x:x+80,y:y+45,'font-size':26,'text-anchor':'middle','font-weight':'bold',fill:C0.teal},g_,l);g_.addEventListener('click',()=>setCloud(k));});}
+}
+function renderJump(k){const cols=[60,580,1100],w=460;
+  [['2 numbers','an oval'],['3 numbers','an egg'],['5120 numbers','can’t draw it — same maths']].forEach(([a,b],i)=>{if(i>=k)return;const x=cols[i];
+    el('rect',{x,y:40,width:w,height:680,rx:22,fill:i===2?C0.tealLt:C0.bg});txt(x+w/2,110,a,44,C0.ink,{'text-anchor':'middle','font-weight':'bold'});txt(x+w/2,680,b,32,i===2?C0.teal:C0.muted,{'text-anchor':'middle','font-weight':'bold'});
+    if(i<2&&i+1<k)arrow(x+w+8,380,x+w+52,380,'muted',6);});
+  if(k>=1){const C=cov(X),E=eig(C);const cx=290,cy=390,s=80;X.forEach(p=>el('circle',{cx:cx+p[0]*s,cy:cy-p[1]*s,r:7,fill:C0.purple,opacity:0.7}));
+    let d='';for(let t=0;t<=360;t+=5){const r=t*Math.PI/180;const a=2*Math.sqrt(E.l[0])*Math.cos(r),b=2*Math.sqrt(E.l[1])*Math.sin(r);d+=(t?'L':'M')+(cx+(a*E.v[0][0]+b*E.v[1][0])*s)+','+(cy-(a*E.v[0][1]+b*E.v[1][1])*s);}el('path',{d:d+'Z',fill:'none',stroke:C0.coral,'stroke-width':5});}
+  if(k>=2){const cx=810,cy=390,s=95;const th=eggT;const R=p=>{const x=p[0]*Math.cos(0.6)-p[1]*Math.sin(0.6),y=p[0]*Math.sin(0.6)+p[1]*Math.cos(0.6),z=p[2];const x2=x*Math.cos(th)+z*Math.sin(th),z2=-x*Math.sin(th)+z*Math.cos(th);return [x2,y*0.9+z2*0.35];};
+    EGG.forEach(p=>{const q=R(p);el('circle',{cx:cx+q[0]*s,cy:cy-q[1]*s,r:4.5,fill:C0.purple,opacity:0.55});});
+    const a=R([3.4,0,0]),b=R([-3.4,0,0]);arrow(cx+b[0]*s*0.0,cy,cx+a[0]*s,cy-a[1]*s,'teal',7);txt(cx+a[0]*s+10,cy-a[1]*s-10,'PC1',32,C0.teal,{'font-weight':'bold'});}
+  if(k>=3){const x=1100+90,y=170,n=14,c=20;for(let i=0;i<n;i++)for(let j=0;j<n;j++){const v=i===j?1:Math.sin(i*1.7+j*0.9)*Math.cos(i*j*0.3)*0.6;el('rect',{x:x+j*c,y:y+i*c,width:c-2,height:c-2,fill:i===j?C0.purple:(v>0?C0.amber:C0.blue),opacity:i===j?0.9:Math.abs(v)*0.8+0.1});}
+    txt(1100+w/2,500,'C: 5120 × 5120',36,C0.teal,{'text-anchor':'middle','font-weight':'bold'});txt(1100+w/2,560,'PC1 = its longest direction',30,C0.teal,{'text-anchor':'middle'});}
+}
+let hoverI=0;
+function renderFormula(){axesFaint();const C=cov(X);
+  X.forEach((p,i)=>{const g=el('g',{style:'cursor:pointer'});el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:i===hoverI?18:12,fill:i===hoverI?C0.amber:C0.purple,stroke:'#fff','stroke-width':2},g);g.addEventListener('mouseenter',()=>{hoverI=i;render();});});
+  const p=X[hoverI];
+  el('line',{x1:MX(p[0]),y1:MY(p[1]),x2:MX(p[0]),y2:MY(0),stroke:C0.amber,'stroke-width':3,'stroke-dasharray':'6 6'});el('line',{x1:MX(p[0]),y1:MY(p[1]),x2:MX(0),y2:MY(p[1]),stroke:C0.amber,'stroke-width':3,'stroke-dasharray':'6 6'});
+  const f=v=>v.toFixed(2).replace('-','−');
+  txt(RX,80,'“'+NAMES[hoverI]+'”',30,C0.ink,{'font-weight':'bold'});
+  txt(RX,130,`numbers: (${f(p[0])}, ${f(p[1])})`,30,C0.amber,{'font-weight':'bold'});
+  const rows=[['number 1 × number 1',p[0]*p[0],C0.purple],['number 2 × number 2',p[1]*p[1],C0.purple],['number 1 × number 2',p[0]*p[1],C0.amber]];
+  rows.forEach(([l,v,c],i)=>{txt(RX,200+i*56,l,28,C0.ink);txt(RX+RW,200+i*56,f(v),32,c,{'text-anchor':'end','font-weight':'bold'});});
+  el('line',{x1:RX,y1:360,x2:RX+RW,y2:360,stroke:C0.ink,'stroke-width':2});
+  txt(RX,410,'average over all 20 (÷ 19):',28,C0.muted);
+  [['width ↔',C[0][0],C0.purple],['width ↕',C[1][1],C0.purple],['lean together',C[0][1],C0.amber]].forEach(([l,v,c],i)=>{txt(RX,465+i*56,l,30,c,{'font-weight':'bold'});txt(RX+RW,465+i*56,f(v),36,c,{'text-anchor':'end','font-weight':'bold'});});
+  el('rect',{x:RX,y:640,width:RW,height:80,rx:16,fill:C0.tealLt});txt(RX+RW/2,692,'C = Xcᵀ Xc ÷ (n − 1)',36,C0.teal,{'text-anchor':'middle','font-weight':'bold'});
+}
+function renderProof(k,C,E){axesFaint();dotsDraw({alpha:0.35,r:10});const [v1,v2]=E.v,[l1,l2]=E.l;
+  rulerDraw(angOf(v1),C0.teal,3,2.6,false);rulerDraw(angOf(v2),C0.purple,3,1.8,false);
+  const u=U(ang),a=dot(u,v1),b=dot(u,v2),L=2.2;const pa=[a*v1[0]*L,a*v1[1]*L];
+  arrow(MX(0),MY(0),MX(pa[0]),MY(pa[1]),'teal',9);arrow(MX(pa[0]),MY(pa[1]),MX(u[0]*L),MY(u[1]*L),'purple',9);arrow(MX(0),MY(0),MX(u[0]*L),MY(u[1]*L),'ink',6);
+  txt(MX(u[0]*L*1.08),MY(u[1]*L*1.08),'ruler',30,C0.ink,{'font-weight':'bold'});
+  txt(RX,90,'weights:',30,C0.muted);el('rect',{x:RX,y:110,width:RW*a*a,height:70,fill:C0.teal});el('rect',{x:RX+RW*a*a,y:110,width:RW*b*b,height:70,fill:C0.purple});
+  if(a*a>0.15)txt(RX+16,157,`a² = ${(a*a).toFixed(2)}`,30,'#fff',{'font-weight':'bold'});if(b*b>0.15)txt(RX+RW-16,157,`b² = ${(b*b).toFixed(2)}`,30,'#fff',{'font-weight':'bold','text-anchor':'end'});
+  if(k>=2){const sp=a*a*l1+b*b*l2;const Xs=v=>RX+30+(v-l2)/(l1-l2)*(RW-60);
+    txt(RX,290,`spread = ${(a*a).toFixed(2)} × ${l1.toFixed(2)} + ${(b*b).toFixed(2)} × ${l2.toFixed(2)} = ${sp.toFixed(2)}`,30,C0.ink,{'font-weight':'bold'});
+    el('line',{x1:Xs(l2),y1:450,x2:Xs(l1),y2:450,stroke:C0.ink,'stroke-width':5});
+    el('circle',{cx:Xs(l2),cy:450,r:18,fill:C0.purple});el('circle',{cx:Xs(l1),cy:450,r:18,fill:C0.teal});
+    txt(Xs(l2),510,`λ₂ = ${l2.toFixed(2)}`,30,C0.purple,{'text-anchor':'middle','font-weight':'bold'});txt(Xs(l1),510,`λ₁ = ${l1.toFixed(2)}`,30,C0.teal,{'text-anchor':'middle','font-weight':'bold'});
+    el('path',{d:`M${Xs(sp)-18},380 L${Xs(sp)+18},380 L${Xs(sp)},420 Z`,fill:C0.amber});txt(Xs(sp),365,'you are here',26,C0.amber,{'text-anchor':'middle','font-weight':'bold'});
+    txt(RX,620,'always between λ₂ and λ₁ — the top only at PC1',30,C0.teal,{'font-weight':'bold'});
+    txt(RX,670,`check from the dots: ${spreadAt(ang).toFixed(2)}`,24,C0.muted);}
+}
+function renderMult(C,E){axesFaint();dotsDraw({alpha:0.3,r:9});rulerDraw(angOf(E.v[0]),C0.teal,3,2.6,false);txt(MX(E.v[0][0]*2.5)+10,MY(E.v[0][1]*2.5),'PC1',30,C0.teal,{'font-weight':'bold'});
+  multHist.forEach((u,i)=>{const last=i===multHist.length-1;const s=u[0]*E.v[0][0]+u[1]*E.v[0][1]<0?-1:1;arrow(MX(0),MY(0),MX(s*u[0]*2),MY(s*u[1]*2),last?'purple':'grey',last?9:4,{opacity:last?1:0.5});});
+  multHist.forEach((u,i)=>{const s=u[0]*E.v[0][0]+u[1]*E.v[0][1]<0?-1:1;const d=Math.acos(Math.min(1,Math.abs(u[0]*E.v[0][0]+u[1]*E.v[0][1])))*180/Math.PI;txt(RX,120+i*70,(i?'× C '+i:'start')+':   '+d.toFixed(1)+'° away from PC1',30,i===multHist.length-1?C0.purple:C0.muted,{'font-weight':i===multHist.length-1?'bold':'normal'});});
+}
+/* ---------------- navigation ---------------- */
+const tabs=document.getElementById('tabs');
+SECTIONS.forEach((s,i)=>{if(s.curious&&!SECTIONS[i-1].curious){const sp=document.createElement('span');sp.className='sep';sp.textContent='for the curious:';tabs.appendChild(sp);}
+  const b=document.createElement('button');b.textContent=(i+1);b.title=s.title;b.onclick=()=>go(i,0);tabs.appendChild(b);});
+function go(i,k){sec=i;stp=k;const s=SECTIONS[sec];document.getElementById('h').textContent=s.title;
+  document.querySelectorAll('#tabs button').forEach((b,j)=>b.classList.toggle('on',j===sec));
+  const S=SCN();document.getElementById('msg').textContent=S.say;document.getElementById('cnt').textContent=`${stp+1} / ${s.steps.length}`;
+  if(!(S.s&&(S.s.cells))&&s.id!=='C'&&X!==null&&s.id!=='formula'&&s.id!=='proof'&&s.id!=='mult'){}
+  if(s.id!=='C'){const same=X.every((p,j)=>p[0]===BASE[j][0]&&p[1]===BASE[j][1]);if(!same)X=BASE.map(p=>p.slice());}
+  if(S.f)S.f();render();try{history.replaceState(null,'','#'+(sec+1));}catch(e){}}
+function next(){const s=SECTIONS[sec];if(stp<s.steps.length-1)go(sec,stp+1);else if(sec<SECTIONS.length-1)go(sec+1,0);}
+function back(){if(stp>0)go(sec,stp-1);else if(sec>0)go(sec-1,SECTIONS[sec-1].steps.length-1);}
+document.getElementById('next').onclick=next;document.getElementById('back').onclick=back;
+let fsz=24;const fs=d=>{fsz=Math.max(16,Math.min(34,fsz+d*2));document.documentElement.style.fontSize=fsz+'px';};
+document.getElementById('bminus').onclick=()=>fs(-1);document.getElementById('bplus').onclick=()=>fs(1);
+const full=()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();else document.exitFullscreen();};
+document.getElementById('bfull').onclick=full;
+window.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}else if(e.key==='ArrowLeft'){e.preventDefault();back();}
+  else if(/^[1-9]$/.test(e.key)){const i=+e.key-1;if(i<SECTIONS.length)go(i,0);}else if(e.key==='0')go(9,0);else if(e.key==='f'||e.key==='F')full();else if(e.key==='+'||e.key==='=')fs(1);else if(e.key==='-')fs(-1);});
+(function spin(){if(SECTIONS[sec].id==='jump'&&SCN().s.jump>=2){eggT+=0.012;render();}requestAnimationFrame(spin);})();
+const h0=parseInt((location.hash||'#1').slice(1));go(h0>=1&&h0<=SECTIONS.length?h0-1:0,0);
+</script>
+</body>
+</html>

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where does truth live? — TARA</title>
+<style>:root { --teal:#0E7C7B; --teal-lt:#DCEEED; --coral:#E4572E; --coral-lt:#FBE4DC; --purple:#6C4AB6; --purple-lt:#EAE3F7; --amber:#B7791F; --amber-lt:#FDF1D6; --ink:#1A1A1A; --muted:#4F5A63; --line:#C9D0D5; --bg:#F2F4F5; --code:#1E1E2E; }
+* { box-sizing:border-box; }
+html { font-size:20px; }
+@media (min-width:1600px) { html { font-size:22px; } }
+body { font-family:Calibri, Carlito, "Segoe UI", Arial, sans-serif; margin:0; padding:28px 40px 60px; background:#fff; color:var(--ink); line-height:1.35; }
+.wrap { max-width:1720px; margin:0 auto; }
+h1 { font-size:2.1rem; margin:0; }
+.sub { color:var(--muted); font-size:1.1rem; margin:6px 0 22px; }
+.kicker { font-size:0.85rem; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:var(--teal); }
+h2 { font-size:1.45rem; margin:0 0 6px; }
+.panel { border:2px solid var(--line); border-radius:18px; padding:24px 28px; margin-bottom:26px; }
+.desc { color:var(--muted); font-size:1.05rem; margin:0 0 18px; max-width:1300px; }
+code, .mono { font-family:"Courier New", "DejaVu Sans Mono", monospace; }
+button { font-family:inherit; font-size:1rem; font-weight:bold; padding:12px 20px; border-radius:12px; border:2px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+button:hover { border-color:var(--teal); }
+button.primary { background:var(--teal); border-color:var(--teal); color:#fff; }
+button:disabled { opacity:0.35; cursor:not-allowed; }
+.seg { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; flex-wrap:wrap; }
+.seg button { border:none; border-radius:0; color:var(--muted); }
+.seg button + button { border-left:2px solid var(--line); }
+.seg button.on { background:var(--teal); color:#fff; }
+.seg.coral button.on { background:var(--coral); }
+.seg.purple button.on { background:var(--purple); }
+.row { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+.col { flex:1; min-width:360px; }
+.ctrl { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.ctrl label { font-weight:bold; color:var(--muted); }
+/* code + pseudocode pair: each row = [code | plain English] */
+.codepair { display:grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); border-radius:14px; overflow:hidden; border:2px solid var(--code); }
+.codepair .c { background:var(--code); color:#E4E4EF; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.95rem; }
+.codepair .p { background:#FAFBFC; font-size:1rem; }
+.codepair .hd { font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; font-weight:bold; padding:14px 18px 8px; color:#9A9AB0; font-family:Calibri, Carlito, sans-serif; }
+.codepair .hd.p { color:var(--muted); }
+.codepair .pad { height:12px; }
+.ln { padding:4px 18px; border-left:6px solid transparent; transition:background .25s, opacity .25s; }
+.ln.c { white-space:pre-wrap; word-break:break-word; }
+.ln.c.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.ln.p.on { background:var(--teal-lt); border-left-color:var(--teal); font-weight:bold; }
+.ln.c.done { color:#8C8CA6; } .ln.c.done span { color:inherit; } .ln.p.done { color:#8A949C; }
+.kw{color:#D19BE0;} .str{color:#F0A77F;} .com{color:#7FBF7F;} .num{color:#B5CEA8;}
+/* flow diagram */
+.flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; row-gap:14px; }
+.node { border:3px solid var(--line); background:var(--bg); border-radius:14px; padding:10px 14px; min-width:120px; text-align:center; transition:all .3s; }
+.node .t { font-weight:bold; font-size:1.05rem; }
+.node .h { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); margin-top:4px; }
+.node.on { border-color:var(--teal); background:var(--teal-lt); box-shadow:0 0 0 5px rgba(14,124,123,.18); }
+.node.bad { border-color:var(--coral); background:var(--coral-lt); }
+.node.dim { opacity:.35; }
+.arr { align-self:center; font-size:1.6rem; color:var(--muted); padding:0 8px; }
+.status { margin-top:16px; padding:14px 18px; border-radius:12px; background:var(--bg); font-size:1.1rem; min-height:56px; }
+.status.good { background:var(--teal-lt); color:#0a5e5d; }
+.status.bad { background:var(--coral-lt); color:#a53a1b; }
+.note { background:var(--amber-lt); border-radius:12px; padding:14px 18px; font-size:1rem; margin-top:10px; }
+.hgrid { display:inline-grid; gap:3px; }
+.hcell { border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:#fff; font-family:"Courier New",monospace; }
+.axis { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+.big { font-size:2.4rem; font-weight:bold; font-family:"Courier New",monospace; }
+.pill { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.9rem; }
+.keys { position:fixed; right:18px; bottom:14px; font-size:0.8rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+.vec { display:inline-grid; grid-template-columns:repeat(6,18px); gap:2px; vertical-align:middle; }
+.vec div { width:18px; height:18px; border-radius:3px; }
+/* stepper */
+.stepper { border:2px solid var(--line); border-radius:18px; padding:18px 22px; margin:14px 0 26px; background:#fff; }
+.st-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.st-head .st-count { color:var(--muted); margin-left:6px; }
+.st-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr); gap:22px; align-items:start; }
+@media (max-width:1100px) { .st-body { grid-template-columns:1fr; } }
+.st-vis { min-height:380px; }
+.st-say { background:var(--teal-lt); color:#0a5e5d; font-weight:bold; font-size:1.2rem; border-radius:14px; padding:16px 18px; line-height:1.4; }
+.st-ex { margin-top:12px; background:var(--amber-lt); border-radius:14px; padding:12px 16px; font-size:1.02rem; }
+.st-ex b { display:block; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--amber); margin-bottom:4px; }
+.st-code { margin-top:12px; background:var(--code); border-radius:14px; padding:10px 0 12px; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.9rem; color:#E4E4EF; }
+.st-code .hd { font-family:Calibri,Carlito,sans-serif; font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#9A9AB0; font-weight:bold; padding:4px 16px 8px; }
+.st-code .l { padding:4px 16px; white-space:pre-wrap; border-left:6px solid transparent; }
+.st-code .l.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.st-code .l.future { color:#6A6A84; } .st-code .l.future span { color:inherit !important; }
+.vn { display:inline-grid; gap:3px; }
+.vn div { border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:"Courier New",monospace; font-weight:bold; font-size:0.82rem; border:1px solid #E1E5E8; }
+.bars { display:flex; gap:10px; align-items:flex-end; }
+.bars .b { text-align:center; width:52px; }
+.bars .bt { display:flex; align-items:flex-end; justify-content:center; }
+.bars .bf { width:36px; border-radius:6px 6px 0 0; transition:height .4s; }
+.bars .bv { font-size:0.75rem; color:var(--muted); height:20px; }
+.bars .bl { font-weight:bold; font-family:"Courier New",monospace; margin-top:4px; }
+.vbox { border:3px solid var(--line); border-radius:14px; padding:10px 12px; background:#fff; display:inline-block; vertical-align:top; transition:all .3s; }
+.vbox .vt { font-size:0.8rem; font-weight:bold; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+.vbox.on { border-color:var(--teal); box-shadow:0 0 0 5px rgba(14,124,123,.15); }
+.vbox.dim { opacity:.28; }
+.varr { display:inline-flex; align-items:center; font-size:1.8rem; color:var(--muted); padding:0 6px; align-self:center; }
+.vrow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; row-gap:12px; }
+.picker { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+.picker button { border:none; border-radius:0; width:54px; font-family:"Courier New",monospace; font-size:1.2rem; padding:10px 0; }
+.picker button + button { border-left:2px solid var(--line); }
+.picker button.on { background:var(--purple); color:#fff; }
+.tokrow2 { display:flex; gap:10px; flex-wrap:wrap; }
+.tk2 { min-width:70px; padding:12px 10px; text-align:center; border:3px solid var(--line); border-radius:12px; font-weight:bold; font-size:1.3rem; background:#fff; transition:all .3s; }
+.tk2 small { display:block; font-weight:normal; font-size:0.7rem; color:var(--muted); font-family:"Courier New",monospace; }
+.legend { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+/* presenter bar */
+.pbar { position:sticky; top:0; z-index:50; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.96); padding:10px 0 12px; margin:-6px 0 12px; border-bottom:2px solid var(--line); }
+.pbar button { padding:8px 14px; font-size:0.9rem; border-radius:10px; }
+.pbar button.sec b { color:var(--teal); margin-right:4px; }
+.pbar button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+.pbar button.on b { color:#fff; }
+.pbar .sp { flex:1; }
+.st-head { position:relative; }
+
+sub { font-size:0.62em; color:inherit; opacity:.75; margin-left:1px; }
+.stepper { scroll-margin-top:84px; }
+
+
+.scat { background:#fff; border:2px solid var(--line); border-radius:14px; }
+.lbl { font-size:0.8rem; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:4px 0 6px; }
+.chip { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.85rem; margin:2px 4px 2px 0; }
+.chip.t { background:var(--teal-lt); color:#0a5e5d; } .chip.f { background:var(--coral-lt); color:#a53a1b; } .chip.p { background:var(--purple-lt); color:#4b2f8f; } .chip.a { background:var(--amber-lt); color:#7a4f10; } .chip.g { background:var(--bg); color:var(--muted); }
+.stat { display:inline-block; text-align:center; padding:10px 16px; border-radius:14px; background:var(--bg); margin:6px 8px 6px 0; min-width:120px; }
+.stat .v { font-family:"Courier New",monospace; font-weight:bold; font-size:1.6rem; }
+.stat .k { font-size:0.8rem; color:var(--muted); font-weight:bold; letter-spacing:1px; text-transform:uppercase; }
+.illus { font-size:0.8rem; color:var(--muted); font-style:italic; margin-top:6px; }
+.tokrow { display:flex; flex-wrap:wrap; gap:4px; align-items:flex-end; }
+.tok { font-family:"Courier New",monospace; font-size:0.95rem; padding:6px 8px; border-radius:8px; border:2px solid var(--line); background:#fff; transition:all .3s; white-space:pre; }
+.tok.pad { color:#9aa3aa; background:#F4F5F6; border-style:dashed; }
+.tok.hi { border-color:var(--teal); background:var(--teal-lt); font-weight:bold; }
+.tok.bad { border-color:var(--coral); background:var(--coral-lt); font-weight:bold; }
+.tok.pu { border-color:var(--purple); background:var(--purple-lt); font-weight:bold; }
+.tok.dim { opacity:.35; }
+table.grid { border-collapse:separate; border-spacing:4px; }
+table.grid td, table.grid th { font-family:"Courier New",monospace; font-size:0.9rem; padding:6px 8px; border-radius:8px; text-align:center; }
+table.grid th { color:var(--muted); font-weight:bold; font-size:0.78rem; }
+.slider { width:100%; accent-color:var(--teal); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:1100px) { .two { grid-template-columns:1fr; } }
+.card { border:2px solid var(--line); border-radius:14px; padding:12px 16px; background:#fff; }
+.card h4 { margin:0 0 6px; font-size:1.05rem; }
+.shape { font-family:"Courier New",monospace; font-weight:bold; color:var(--purple); }
+
+.lstrip { display:flex; gap:4px; flex-wrap:wrap; align-items:stretch; }
+.lbox { border:2px solid var(--line); border-radius:10px; padding:6px 8px; text-align:center; min-width:62px; background:#fff; font-size:0.8rem; transition:all .3s; }
+.lbox .i { font-family:"Courier New",monospace; font-weight:bold; font-size:0.95rem; }
+.lbox.on { border-color:var(--teal); background:var(--teal-lt); box-shadow:0 0 0 4px rgba(14,124,123,.15); }
+.lbox.emb { background:var(--amber-lt); border-color:var(--amber); }
+.lbox.gap { border:none; background:none; min-width:20px; font-size:1.2rem; color:var(--muted); align-self:center; }
+.maskc { font-weight:bold; }
+#s1 .st-body, #s3 .st-body { grid-template-columns:minmax(0,2.4fr) minmax(280px,1fr); }
+.st-vis { overflow-x:auto; }
+table.grid { border-spacing:2px; } table.grid td { padding:1px 2px !important; } table.grid .tok { font-size:0.78rem; padding:3px 4px; }
+#s1 .st-body { grid-template-columns:minmax(0,3fr) minmax(250px,1fr); }
+</style></head>
+<body><div class="wrap">
+<div class="kicker">TARA · Week 5 · Setup &amp; visualising truth</div>
+<h1>Where does truth live? — activations, PCA and the layer sweep</h1>
+<div class="sub">A <b>probe</b> reads a property from a model’s activations. Before any probe, three questions: <b>which activation</b> do we take, is truth <b>visible without labels</b> (PCA), and <b>which layer</b> holds it best. Model in the notebook: Llama-2-13B (40 layers, d_model = 5120), probe layer 14.</div>
+
+<h2>1 · Where do we read? Every token, every layer</h2>
+<div id="s0w"></div>
+<h2>2 · Which activation? One vector per statement</h2>
+<div id="s1"></div>
+<h2>3 · PCA from scratch — the best 2-D shadow</h2>
+<div id="s2a"></div>
+<h2>4 · PCA maths, worked with real numbers</h2>
+<div id="s2m"></div>
+<h2>5 · PCA on the real activations — does truth jump out?</h2>
+<div id="s2"></div>
+<h2>6 · PCA across layers — when does truth appear?</h2>
+<div id="s4b"></div>
+<h2>7 · Layer sweep — where does truth live?</h2>
+<div id="s3"></div>
+
+<div class="note">Everything on this page is a small <b>toy</b> built to show the idea. Point clouds and curves are synthetic and illustrative; the real Llama-2-13B plots come from your notebook run. Token splits are simplified.</div>
+<div class="note" style="background:var(--bg)"><b>Read more:</b> <a href="https://arxiv.org/abs/2310.06824" target="_blank">The Geometry of Truth (Marks &amp; Tegmark)</a> · <a href="https://arena-chapter1-transformer-interp.streamlit.app/" target="_blank">ARENA 1.3.1 Linear Probes</a></div>
+</div>
+<script>// ===== TARA kit (shared with Week 4 pages) =====
+
+function seededRand(seed) { let s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+function softmax(arr) { const m = Math.max(...arr.filter(v => v > -1e8)); const ex = arr.map(v => v <= -1e8 ? 0 : Math.exp(v - m)); const s = ex.reduce((a, b) => a + b, 0); return ex.map(v => v / s); }
+
+function argmax(a) { let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; }
+
+function rampColor(w, base = [14, 124, 123]) { const t = Math.max(0, Math.min(1, w)); return `rgb(${Math.round(255 - t * (255 - base[0]))},${Math.round(255 - t * (255 - base[1]))},${Math.round(255 - t * (255 - base[2]))})`; }
+
+function divColor(v, bound = 1) { const t = Math.max(-1, Math.min(1, v / bound)); if (t >= 0) return rampColor(t); return `rgb(255,${Math.round(255 + t * (255 - 87))},${Math.round(255 + t * (255 - 46))})`; }
+
+function hl(line) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  let code = line, com = '';
+  const ci = line.indexOf('#'); if (ci >= 0) { code = line.slice(0, ci); com = line.slice(ci); }
+  let out = esc(code).replace(/("[^"]*"|'[^']*')|\b(def|return|for|in|if|else|lambda|None|True|False|with|try|finally|class)\b|\b(\d+(?:\.\d+)?)\b/g, (m, s, k, n) => s ? `<span class="str">${s}</span>` : k ? `<span class="kw">${k}</span>` : `<span class="num">${n}</span>`);
+  return out + (com ? `<span class="com">${esc(com)}</span>` : '');
+}
+
+function codePair(el, title, rows) {
+  el.classList.add('codepair');
+  el.innerHTML = `<div class="hd c">${title}</div><div class="hd p">what it does</div>` +
+    rows.map((r, i) => `<div class="ln c" data-i="${i}">${r.code ? hl(r.code) : '&nbsp;'}</div><div class="ln p" data-i="${i}">${r.say || '&nbsp;'}</div>`).join('') +
+    `<div class="c pad"></div><div class="p pad"></div>`;
+  return (on = [], doneBelow = -1) => el.querySelectorAll('.ln').forEach(d => { const i = +d.dataset.i; d.classList.toggle('on', on.includes(i)); d.classList.toggle('done', i < doneBelow && !on.includes(i)); });
+}
+
+// ---------------- Stepper: every section = ① Intuition steps, then ② Code steps, one shared visual ----------------
+const STEPPERS = [];
+function Stepper(root, cfg) {
+  // cfg: { intuition:[{say, ex, v}], code:{file, lines:[...], steps:[{a:[...], say, v}]}, render(v, mode, k, vis) }
+  if (typeof root === 'string') root = document.getElementById(root);
+  root.classList.add('stepper');
+  const hasCode = !!cfg.code;
+  root.innerHTML = `<div class="st-head">
+      <div class="seg st-modes"><button data-m="i" class="on">① Intuition</button>${hasCode ? '<button data-m="c">② Pseudocode</button>' : ''}</div>
+      <button class="st-back">◀ Back</button><button class="primary st-next">Next ▶</button><span class="st-count mono"></span></div>
+    <div class="st-body"><div class="st-vis"></div><div class="st-side"><div class="st-say"></div><div class="st-ex"></div><div class="st-code"></div></div></div>`;
+  const q = s => root.querySelector(s);
+  const self = { mode: 'i', k: 0, root };
+  const steps = () => self.mode === 'i' ? cfg.intuition : cfg.code.steps;
+  self.render = () => {
+    const st = steps()[self.k];
+    root.querySelectorAll('.st-modes button').forEach(b => b.classList.toggle('on', b.dataset.m === self.mode));
+    q('.st-say').innerHTML = st.say;
+    q('.st-ex').innerHTML = st.ex ? `<b>Example</b> ${st.ex}` : '';
+    q('.st-ex').style.display = st.ex ? 'block' : 'none';
+    if (self.mode === 'c') {
+      const last = Math.max(...st.a);
+      q('.st-code').style.display = 'block';
+      q('.st-code').innerHTML = `<div class="hd">${cfg.code.file}</div>` + cfg.code.lines.map((l, i) => `<div class="l ${st.a.includes(i) ? 'on' : ''} ${i > last ? 'future' : ''}">${l ? hl(l.replace(/(\S)\s{2,}#/, '$1  #')) : '&nbsp;'}</div>`).join('');
+    } else q('.st-code').style.display = 'none';
+    q('.st-count').textContent = `${self.mode === 'i' ? 'intuition' : 'pseudocode'} · step ${self.k + 1} / ${steps().length}`;
+    q('.st-back').disabled = self.k === 0 && self.mode === 'i';
+    q('.st-next').disabled = self.k === steps().length - 1 && (self.mode === 'c' || !hasCode);
+    q('.st-next').textContent = (self.k === steps().length - 1 && self.mode === 'i' && hasCode) ? 'Go to pseudocode ▶' : 'Next ▶';
+    cfg.render(st.v || {}, self.mode, self.k, q('.st-vis'));
+  };
+  self.next = () => { if (self.k < steps().length - 1) self.k++; else if (self.mode === 'i' && hasCode) { self.mode = 'c'; self.k = 0; } self.render(); };
+  self.back = () => { if (self.k > 0) self.k--; else if (self.mode === 'c') { self.mode = 'i'; self.k = cfg.intuition.length - 1; } self.render(); };
+  q('.st-next').onclick = self.next; q('.st-back').onclick = self.back;
+  root.querySelectorAll('.st-modes button').forEach(b => b.onclick = () => { self.mode = b.dataset.m; self.k = 0; self.render(); });
+  STEPPERS.push(self); self.render();
+  return self;
+}
+// ---------------- presenter mode: one section at a time, tabs, keys, text size, full screen ----------------
+let ACTIVE_ST = null;
+function nearestStepper() {
+  if (ACTIVE_ST && ACTIVE_ST.root.offsetParent !== null) return ACTIVE_ST;
+  const mid = window.innerHeight / 2; let best = STEPPERS[0], bd = 1e9;
+  STEPPERS.forEach(s => { const r = s.root.getBoundingClientRect(); const d = Math.abs((r.top + r.bottom) / 2 - mid); if (r.bottom > 0 && r.top < window.innerHeight && d < bd) { bd = d; best = s; } });
+  return best;
+}
+function setFont(px) { document.documentElement.style.fontSize = px + 'px'; try { localStorage.setItem('tara-font', px); } catch (e) {} }
+function curFont() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
+window.addEventListener('load', () => {
+  try { const f = localStorage.getItem('tara-font'); if (f) setFont(+f); } catch (e) {}
+  const secs = STEPPERS.map(st => { let h = st.root.previousElementSibling; while (h && h.tagName !== 'H2') h = h.previousElementSibling; return { st, h }; });
+  secs.sort((x, y) => (x.st.root.compareDocumentPosition(y.st.root) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  const wrap = document.querySelector('.wrap'); if (!wrap || !secs.length) return;
+  const bar = document.createElement('div'); bar.className = 'pbar';
+  bar.innerHTML = (secs.length > 1 ? secs.map((s, i) => `<button class="sec" data-i="${i}"><b>${i + 1}</b> ${(s.h ? s.h.textContent : 'Section ' + (i + 1)).replace(/^\s*\d+\s*·\s*/, '').split(/ — | – /)[0]}</button>`).join('') : '') +
+    `<span class="sp"></span><button data-a="-" title="smaller text (−)">A−</button><button data-a="+" title="bigger text (+)">A+</button><button data-a="f" title="full screen (F)">⛶</button>` + (secs.length > 1 ? `<button data-a="all" title="show every section (0)">all</button>` : '');
+  const sub = wrap.querySelector('.sub'); (sub || wrap.firstChild).after(bar);
+  let all = secs.length < 2;
+  window.showSection = i => {
+    ACTIVE_ST = all ? null : secs[i].st;
+    secs.forEach((s, j) => { const on = all || j === i; s.st.root.style.display = on ? '' : 'none'; if (s.h) s.h.style.display = on ? '' : 'none'; });
+    bar.querySelectorAll('.sec').forEach(b => b.classList.toggle('on', !all && +b.dataset.i === i));
+    const ab = bar.querySelector('[data-a="all"]'); if (ab) ab.classList.toggle('on', all);
+    if (!all) { const top = bar.getBoundingClientRect().top + window.scrollY; if (window.scrollY > top) window.scrollTo(0, top); }
+  };
+  bar.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.i != null) { all = false; showSection(+b.dataset.i); }
+    else if (b.dataset.a === '+') setFont(curFont() + 2);
+    else if (b.dataset.a === '-') setFont(Math.max(14, curFont() - 2));
+    else if (b.dataset.a === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (b.dataset.a === 'all') { all = !all; showSection(Math.max(0, secs.findIndex(s => s.st === ACTIVE_ST))); }
+  };
+  showSection(0);
+  window._secs = secs.length;
+  const kh = document.createElement('div'); kh.className = 'keys'; kh.textContent = '→ next · ← back' + (secs.length > 1 ? ' · 1–' + secs.length + ' section' : '') + ' · C intuition/pseudocode · + − text size · F full screen'; document.body.appendChild(kh);
+});
+document.addEventListener('keydown', e => {
+  if (!STEPPERS.length || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const best = nearestStepper();
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); best.next(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); best.back(); }
+  else if (/^[1-9]$/.test(e.key) && window.showSection && +e.key <= (window._secs || 0) && window._secs > 1) window.showSection(+e.key - 1);
+  else if (e.key === '+' || e.key === '=') setFont(curFont() + 2);
+  else if (e.key === '-') setFont(Math.max(14, curFont() - 2));
+  else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+  else if (e.key === 'c' || e.key === 'C') { best.mode = best.mode === 'i' ? 'c' : 'i'; best.k = 0; best.render(); }
+});
+
+function gauss(rand) { let u = 0, v = 0; while (u === 0) u = rand(); while (v === 0) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const COL = { t:'#0E7C7B', f:'#E4572E', p:'#6C4AB6', a:'#B7791F', g:'#8A949C', ink:'#1A1A1A', line:'#C9D0D5' };
+// generic SVG scatter. pts: [{x,y,c,o}] ; opts: {w,h,pad,xr,yr,lines:[{x1,y1,x2,y2,c,w,dash,arrow,label}], xlab, ylab}
+function scatterSVG(pts, o = {}) {
+  const W = o.w || 520, H = o.h || 380, P = o.pad || 36;
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const xr = o.xr || [Math.min(...xs), Math.max(...xs)], yr = o.yr || [Math.min(...ys), Math.max(...ys)];
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - 2 * P), sy = y => H - P - (y - yr[0]) / (yr[1] - yr[0]) * (H - 2 * P);
+  const UID = (window._svgN = (window._svgN || 0) + 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><defs>` +
+    ['t','f','p','a','g','ink'].map(k => `<marker id="ar${k}_${UID}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COL[k]}"/></marker>`).join('') + `</defs>`;
+  if (o.axes !== false) { s += `<line x1="${P}" y1="${H - P}" x2="${W - P / 2}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/><line x1="${P}" y1="${H - P}" x2="${P}" y2="${P / 2}" stroke="#C9D0D5" stroke-width="2"/>`;
+    if (o.xlab) s += `<text x="${W - P}" y="${H - 10}" text-anchor="end" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.xlab}</text>`;
+    if (o.ylab) s += `<text x="12" y="${P / 2 + 4}" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.ylab}</text>`; }
+  (o.under || []).forEach(q => { s += q(sx, sy); });
+  pts.forEach(p => { s += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${p.r || 5}" fill="${p.c || COL.g}" fill-opacity="${p.o ?? 0.7}" ${p.s ? `stroke="${p.s}" stroke-width="2.5"` : ''}/>`; });
+  s += `<clipPath id="cp${W}${H}"><rect x="${P}" y="${P / 2}" width="${W - 1.5 * P}" height="${H - 1.5 * P}"/></clipPath>`;
+  (o.lines || []).forEach(l => { const col = COL[l.c] || l.c; s += `<line x1="${sx(l.x1)}" y1="${sy(l.y1)}" x2="${sx(l.x2)}" y2="${sy(l.y2)}" stroke="${col}" stroke-width="${l.w || 3}" ${l.clip ? `clip-path="url(#cp${W}${H})"` : ''} ${l.dash ? 'stroke-dasharray="8 6"' : ''} ${l.arrow ? `marker-end="url(#ar${l.c}_${UID})"` : ''}/>`;
+    if (l.label) s += `<text x="${sx(l.x2) + (l.dx || 6)}" y="${sy(l.y2) + (l.dy || -6)}" font-size="18" font-weight="bold" fill="${col}" font-family="Calibri,Carlito,sans-serif">${l.label}</text>`; });
+  (o.marks || []).forEach(m => { s += `<g><circle cx="${sx(m.x)}" cy="${sy(m.y)}" r="9" fill="#fff" stroke="${COL[m.c] || m.c}" stroke-width="4"/>${m.label ? `<text x="${sx(m.x) + 12}" y="${sy(m.y) + 5}" font-size="17" font-weight="bold" fill="${COL[m.c] || m.c}" font-family="Calibri,Carlito,sans-serif">${m.label}</text>` : ''}</g>`; });
+  (o.texts || []).forEach(t => { s += `<text x="${sx(t.x)}" y="${sy(t.y)}" font-size="${t.size || 17}" font-weight="bold" fill="${COL[t.c] || t.c || '#4F5A63'}" text-anchor="${t.anchor || 'start'}" font-family="Calibri,Carlito,sans-serif">${t.t}</text>`; });
+  return s + '</svg>';
+}
+// simple line/curve chart: series [{pts:[[x,y]..], c, dash, w}]
+function lineSVG(series, o = {}) {
+  const W = o.w || 520, H = o.h || 300, P = 44;
+  const xr = o.xr, yr = o.yr;
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - P - 16), sy = y => H - P + 6 - (y - yr[0]) / (yr[1] - yr[0]) * (H - P - 20);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat">`;
+  (o.yticks || []).forEach(v => { s += `<line x1="${P}" x2="${W - 16}" y1="${sy(v)}" y2="${sy(v)}" stroke="#EEF0F2"/><text x="${P - 6}" y="${sy(v) + 5}" font-size="16" text-anchor="end" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.xticks || []).forEach(v => { s += `<text x="${sx(v)}" y="${H - P + 24}" font-size="16" text-anchor="middle" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.bands || []).forEach(b => { s += `<rect x="${sx(b[0])}" y="${sy(yr[1])}" width="${sx(b[1]) - sx(b[0])}" height="${sy(yr[0]) - sy(yr[1])}" fill="${b[2] || '#DCEEED'}" opacity=".6"/>`; });
+  series.forEach(se => { s += `<polyline fill="none" stroke="${COL[se.c] || se.c}" stroke-width="${se.w || 3}" ${se.dash ? 'stroke-dasharray="7 6"' : ''} points="${se.pts.map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ')}"/>`; });
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${sy(yr[0])}" y2="${sy(yr[1])}" stroke="${COL[v.c] || v.c}" stroke-width="2" stroke-dasharray="6 5"/>${v.label ? `<text x="${sx(v.x) + 6}" y="${sy(yr[1]) + 16}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  (o.dots || []).forEach(d => { s += `<circle cx="${sx(d[0])}" cy="${sy(d[1])}" r="7" fill="${COL[d[2]] || d[2]}" stroke="#fff" stroke-width="2"/>`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  if (o.ylab) s += `<text x="14" y="${H / 2}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" transform="rotate(-90 14 ${H / 2})" font-family="Calibri,Carlito,sans-serif">${o.ylab}</text>`;
+  return s + '</svg>';
+}
+function histSVG(groups, o = {}) { // groups: [{vals, c}] ; draws overlaid histograms
+  const W = o.w || 520, H = o.h || 220, P = 30, lo = o.lo, hi = o.hi, nb = o.bins || 28;
+  const bw = (hi - lo) / nb; let mx = 1; const hs = groups.map(g => { const h = Array(nb).fill(0); g.vals.forEach(v => { const i = Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / bw))); h[i]++; }); mx = Math.max(mx, ...h); return h; });
+  const sx = x => P + (x - lo) / (hi - lo) * (W - 2 * P);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><line x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/>`;
+  hs.forEach((h, gi) => h.forEach((c, i) => { if (!c) return; const hh = c / mx * (H - 2 * P); s += `<rect x="${sx(lo + i * bw) + 1}" y="${H - P - hh}" width="${(W - 2 * P) / nb - 2}" height="${hh}" fill="${COL[groups[gi].c] || groups[gi].c}" opacity="0.55" rx="2"/>`; }));
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${P / 2}" y2="${H - P}" stroke="${COL[v.c] || v.c}" stroke-width="3" ${v.dash ? 'stroke-dasharray="6 5"' : ''}/>${v.label ? `<text x="${sx(v.x) + 6}" y="${P / 2 + 12}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  return s + '</svg>';
+}
+
+
+// ---------------- Where do we read? token × layer ----------------
+const WT = ['<s>', 'The', 'city', 'of', 'Paris', 'is', 'in', 'Japan', '.'], WL = [39, 24, 14, 8, 4, 0];
+function knows(t, L) { const tok = WT[t];
+  if (L === 0) return tok === '.' ? 'Just the token “.” — IDENTICAL for every statement. Nothing about the claim.' : `Just the word “${tok.trim()}” itself. No context yet.`;
+  if (tok === '.') { if (L <= 4) return 'Attention has copied in the words: it knows WHICH sentence it ends. Not yet whether it is true.'; if (L <= 14) return 'The whole claim — and “is it true?” has been computed here. ← we probe this.'; if (L <= 24) return 'Truth is still here, mixed with planning the next word.'; return 'Mostly about predicting the NEXT word (a newline, “The”…).'; }
+  if (tok === 'Paris') return L <= 4 ? '“Paris” + “the city of” → a city.' : 'A French city. But it has NOT seen “Japan” yet — it cannot know if the claim is true.';
+  if (tok === 'Japan') return L <= 4 ? '“Japan” + nearby words.' : '“Paris … in Japan” — but the sentence could continue: “in Japanese guidebooks”. Not finished.';
+  return L <= 4 ? `“${tok.trim()}” plus a little context.` : 'Part of the sentence so far — only what is to its LEFT.'; }
+let wSel = [8, 14];
+function rw(v, mode, k, el) {
+  if (v.sel) wSel = v.sel;
+  let h = `<div class="lbl">every token × every layer has its own 5120-number vector — click any cell</div><table class="grid"><tr><th>layer</th>${WT.map(t => `<th>${t.replace('<', '&lt;')}</th>`).join('')}</tr>`;
+  WL.forEach(L => { h += `<tr><th>${L}</th>`; WT.forEach((t, i) => { const on = wSel[0] === i && wSel[1] === L, col = v.col && i === 8;
+    h += `<td data-t="${i}" data-l="${L}" style="cursor:pointer;width:62px;height:34px;background:${on ? COL.t : col ? 'var(--teal-lt)' : v.row && L === 14 ? 'var(--purple-lt)' : '#F2F4F5'};border:${on ? '3px solid #0a5e5d' : '1px solid #E1E5E8'}"></td>`; }); h += '</tr>'; });
+  h += `</table><div class="status ${wSel[0] === 8 && wSel[1] >= 8 && wSel[1] <= 24 ? 'good' : ''}" style="margin-top:12px"><b>${WT[wSel[0]].replace('<','&lt;')} @ layer ${wSel[1]}:</b> ${knows(wSel[0], wSel[1])}</div>`;
+  if (v.note) h += `<div class="status">${v.note}</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('td[data-t]').forEach(c => c.onclick = () => { wSel = [+c.dataset.t, +c.dataset.l]; rw({ ...v, sel: wSel, note: null }, mode, k, el); });
+}
+Stepper('s0w', { render: rw, intuition: [
+  { say: 'One statement = 9 tokens × 41 layers = hundreds of vectors. A probe needs ONE. Which?', v: { sel: [4, 14], note: '9 tokens × 41 layers × 5120 numbers ≈ 1.9 million numbers for one short sentence.' } },
+  { say: 'At “Paris” the model has not seen “Japan” yet. It reads left to right — it cannot know.', v: { sel: [4, 14] } },
+  { say: 'At “Japan” the claim looks done… but it could still become “Paris is in Japanese guidebooks.”', v: { sel: [7, 14] } },
+  { say: 'At “.” the claim is complete. This is the first place truth CAN be computed.', v: { sel: [8, 14], col: 1 } },
+  { say: 'Now the layer. At layer 0 the “.” is just the word “.” — the same for every statement.', v: { sel: [8, 0], col: 1 } },
+  { say: 'Early layers: attention copies the sentence into the “.” — it knows WHICH sentence, not yet if it’s true.', v: { sel: [8, 4], col: 1 } },
+  { say: 'Middle layers: truth has been computed. Layer 14 is the paper’s probe layer.', v: { sel: [8, 14], col: 1 } },
+  { say: 'Last layers: mostly about predicting the NEXT word. Truth gets mixed with other jobs.', v: { sel: [8, 39], col: 1, note: 'So: record the “.” at EVERY layer, then measure which layer reads best (the layer sweep).' } } ] });
+
+// ---------------- Section 1: padding + last real token + hidden_states offset ----------------
+const ROWS = [
+  { toks: ['<s>', 'The', ' city', ' of', ' Paris', ' is', ' in', ' France', '.'], lab: 'TRUE' },
+  { toks: ['<s>', 'The', ' city', ' of', ' Kras', 'nod', 'ar', ' is', ' in', ' South', ' Africa', '.'], lab: 'FALSE' },
+  { toks: ['<s>', 'The', ' city', ' of', ' Ky', 'iv', ' is', ' in', ' Ukraine', '.'], lab: 'TRUE' },
+];
+const SEQ = 12;
+function r1(v, mode, k, el) {
+  let h = `<div class="lbl">A batch of 3 statements → tokens (columns = positions 0…${SEQ - 1})</div><table class="grid"><tr><th></th>` + Array.from({ length: SEQ }, (_, i) => `<th>${i}</th>`).join('') + (v.mask ? '<th>mask.sum</th><th>last</th>' : '') + `</tr>`;
+  ROWS.forEach((r, b) => {
+    const n = r.toks.length, last = n - 1;
+    h += `<tr><th>b=${b}</th>`;
+    for (let i = 0; i < SEQ; i++) {
+      const real = i < n; if (!real && !v.pad) { h += '<td></td>'; continue; }
+      let cls = real ? 'tok' : 'tok pad';
+      if (v.period && real && i === last) cls += ' hi';
+      if (v.bad && i === SEQ - 1) cls += real ? ' hi' : ' bad';
+      if (v.pick && real && i === last) cls += ' hi';
+      if (v.dimOthers && !(real && i === last)) cls += ' dim';
+      h += `<td style="padding:2px"><div class="${cls}">${real ? r.toks[i].replace('<', '&lt;') : 'PAD'}</div>${v.mask ? `<div class="maskc mono" style="color:${real ? COL.t : COL.f}">${real ? 1 : 0}</div>` : ''}</td>`;
+    }
+    if (v.mask) h += `<td><b>${n}</b></td><td style="background:var(--teal-lt)"><b>${last}</b></td>`;
+    h += `</tr>`;
+  });
+  h += `</table>`;
+  if (v.bad) h += `<div class="status bad">hidden[:, -1] takes column ${SEQ - 1} for every row. Only b=1 is really a period there — b=0 and b=2 get a <b>PAD</b> vector. Silent bug: no error, just garbage accuracy.</div>`;
+  if (v.mask) h += `<div class="status good">last_idx = attention_mask.sum(dim=1) − 1 → [${ROWS.map(r => r.toks.length - 1).join(', ')}]. Pick row b, column last_idx[b].</div>`;
+  if (v.layers) {
+    const L = v.L ?? 14;
+    h += `<div class="lbl" style="margin-top:18px">outputs.hidden_states — a tuple of 41 tensors for a 40-layer model</div><div class="lstrip">`;
+    const show = [0, 1, 2, 'gap', L, L + 1, L + 2, 'gap', 40];
+    show.forEach(i => { if (i === 'gap') { h += `<div class="lbox gap">…</div>`; return; }
+      const on = v.pickL && i === L + 1; h += `<div class="lbox ${i === 0 ? 'emb' : ''} ${on ? 'on' : ''}"><div class="i">[${i}]</div>${i === 0 ? 'embeddings' : 'after layer ' + (i - 1)}</div>`; });
+    h += `</div>`;
+    if (v.pickL) h += `<div class="status good">“Probe layer 14” = hidden_states[<b>15</b>]. Index 0 is the embedding output, so everything is shifted by one.</div>`;
+  }
+  if (v.result) h += `<div class="status" style="margin-top:12px">Result: one vector of <b>5120</b> numbers per statement → a matrix <span class="shape">[n_statements, 5120]</span>, plus a label (1 = true, 0 = false).</div>`;
+  el.innerHTML = h;
+}
+Stepper('s1', {
+  render: r1,
+  intuition: [
+    { say: 'Every token becomes a vector at every layer. For a probe we want ONE vector per statement. Which token, which layer?', ex: 'Three statements from the cities dataset, with different lengths.', v: {} },
+    { say: 'Which token: the final period. By then the model has read the whole claim — the truth judgement is concentrated there.', ex: 'The datasets are built so every statement ends with “.” — the notebook even asserts it.', v: { period: 1 } },
+    { say: 'To batch them, shorter rows are padded on the RIGHT up to the longest row.', v: { pad: 1, period: 1 } },
+    { say: 'The trap: hidden[:, -1] takes the last COLUMN. For short rows that is a PAD token.', ex: 'No crash, no warning — just a probe trained on filler.', v: { pad: 1, bad: 1 } },
+    { say: 'Fix: attention_mask is 1 for real tokens, 0 for padding. Its row sum is the real length; length − 1 is the index of the period.', v: { pad: 1, mask: 1, pick: 1 } },
+    { say: 'Which layer: output_hidden_states=True returns 41 tensors. [0] is the embeddings, [i] is the output of layer i−1.', v: { pad: 1, mask: 1, pick: 1, layers: 1 } },
+    { say: 'So probe layer 14 means hidden_states[15]. Get this wrong and you silently probe the layer before.', v: { pad: 1, mask: 1, pick: 1, layers: 1, pickL: 1 } },
+    { say: 'Result: a [n, 5120] matrix of last-token activations and a label per row. Everything today starts here.', v: { pad: 1, mask: 1, pick: 1, dimOthers: 1, layers: 1, pickL: 1, result: 1 } },
+  ],
+  code: { file: 'pseudocode · extract_activations', lines: [
+    'for each batch of statements:',
+    '    inputs = tokenizer(batch, padding=True)          # right-padded',
+    '    with no_grad: out = model(**inputs, output_hidden_states=True)',
+    '    last = inputs.attention_mask.sum(dim=1) - 1       # [batch]',
+    '    for L in layers:',
+    '        h = out.hidden_states[L + 1]                  # [batch, seq, d]',
+    '        rows = arange(batch)',
+    '        acts[L].append(h[rows, last])                 # [batch, d]',
+    'return {L: cat(acts[L]) for L in layers}             # [n, d]'],
+    steps: [
+      { a: [0, 1], say: 'Tokenize with padding so the batch is one rectangle.', v: { pad: 1 } },
+      { a: [2], say: 'One forward pass, no gradients, ask for every layer’s residual stream.', v: { pad: 1 } },
+      { a: [3], say: 'Real length − 1 = index of the last real token, per row.', v: { pad: 1, mask: 1, pick: 1 } },
+      { a: [4, 5], say: 'Offset by one: layer L lives at hidden_states[L + 1].', v: { pad: 1, mask: 1, pick: 1, layers: 1, pickL: 1 } },
+      { a: [6, 7], say: 'Advanced indexing: pair row b with column last[b]. Shape goes [batch, seq, d] → [batch, d].', v: { pad: 1, mask: 1, pick: 1, dimOthers: 1 } },
+      { a: [8], say: 'Concatenate batches. Move to CPU as float32 before storing — bfloat16 on GPU fills memory fast.', v: { pad: 1, mask: 1, pick: 1, dimOthers: 1, result: 1 } },
+    ] },
+});
+
+
+// ---------------- PCA from scratch: rotate a line, watch the shadows ----------------
+const PZ = (() => { const r = seededRand(42), th = 30 * Math.PI / 180, u = [Math.cos(th), Math.sin(th)], n = [-u[1], u[0]]; return Array.from({ length: 40 }, () => { const a = gauss(r) * 1.6, b = gauss(r) * 0.45; return [a * u[0] + b * n[0], a * u[1] + b * n[1]]; }); })();
+function spreadAt(deg) { const t = deg * Math.PI / 180, pr = PZ.map(p => p[0] * Math.cos(t) + p[1] * Math.sin(t)), m = pr.reduce((a, b) => a + b, 0) / pr.length; return pr.reduce((a, b) => a + (b - m) ** 2, 0) / pr.length; }
+let pzAng = 90; const PZ_BEST = (() => { let b = 0, ba = 0; for (let a = 0; a < 180; a++) { const v = spreadAt(a); if (v > b) { b = v; ba = a; } } return { a: ba, v: b }; })();
+function rz(v, mode, k, el) {
+  if (v.ang != null) pzAng = v.ang;
+  const t = pzAng * Math.PI / 180, u = [Math.cos(t), Math.sin(t)], sp = spreadAt(pzAng);
+  const pts = PZ.map(p => ({ x: p[0], y: p[1], c: COL.g, o: 0.8 }));
+  const lines = [{ x1: -5 * u[0], y1: -5 * u[1], x2: 5 * u[0], y2: 5 * u[1], c: 'p', w: 4, clip: 1 }];
+  if (v.shadow) PZ.forEach(p => { const d = p[0] * u[0] + p[1] * u[1]; lines.push({ x1: p[0], y1: p[1], x2: d * u[0], y2: d * u[1], c: '#B9A8E0', w: 1, dash: 1 }); pts.push({ x: d * u[0], y: d * u[1], c: COL.p, r: 4, o: 1 }); });
+  if (v.pc2) { const b = PZ_BEST.a * Math.PI / 180, w2 = [-Math.sin(b), Math.cos(b)]; lines.push({ x1: -3 * w2[0], y1: -3 * w2[1], x2: 3 * w2[0], y2: 3 * w2[1], c: 'a', w: 3, dash: 1, clip: 1, label: 'PC2' }); }
+  let h = `<div class="ctrl"><label>Angle of the line:</label><input type="range" min="0" max="179" value="${pzAng}" class="slider" id="pzr" style="max-width:420px"><span class="big" style="font-size:1.5rem">${pzAng}°</span><button id="pzb">jump to best</button></div>`;
+  h += `<div class="row"><div class="col">${scatterSVG(pts, { xr: [-4.5, 4.5], yr: [-3.5, 3.5], w: 600, h: 470, lines, axes: false })}</div><div class="col" style="max-width:380px">`;
+  h += `<div class="stat"><div class="k">spread of the shadows</div><div class="v" style="color:${COL.p}">${sp.toFixed(2)}</div></div><div class="stat"><div class="k">best possible</div><div class="v">${PZ_BEST.v.toFixed(2)}</div></div>`;
+  h += `<div style="height:22px;background:var(--bg);border-radius:10px;margin:8px 0;overflow:hidden"><div style="height:100%;width:${(sp / PZ_BEST.v * 100).toFixed(0)}%;background:${COL.p}"></div></div><div class="legend">${(sp / PZ_BEST.v * 100).toFixed(0)}% of the best spread</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}" style="margin-top:10px">${v.note}</div>`;
+  h += `</div></div><div class="illus">Toy: 40 points with 2 numbers each. Real statements have 5120 numbers — same idea.</div>`;
+  el.innerHTML = h;
+  el.querySelector('#pzr').oninput = e => { pzAng = +e.target.value; rz({ ...v, ang: pzAng }, mode, k, el); };
+  el.querySelector('#pzb').onclick = () => { pzAng = PZ_BEST.a; rz({ ...v, ang: pzAng, shadow: 1 }, mode, k, el); };
+}
+Stepper('s2a', {
+  render: rz,
+  intuition: [
+    { say: 'A cloud of points, 2 numbers each. Goal: pick ONE line that keeps as much of the cloud’s shape as possible.', ex: 'Like choosing the camera angle that shows the most of an object.', v: { ang: 90 } },
+    { say: 'Drop every point straight onto the line — its “shadow”. Vertical line: the shadows bunch up. Little spread → we lost most of the information.', v: { ang: 90, shadow: 1, bad: 1, note: 'Shadows squashed together: points that were far apart now look the same.' } },
+    { say: 'Turn the line. At this angle it is still bad.', v: { ang: 140, shadow: 1 } },
+    { say: 'Line ALONG the cloud: shadows spread out — they keep most of the differences between points. Spread is called variance.', v: { ang: 30, shadow: 1, good: 1, note: 'Most spread = most information kept.' } },
+    { say: 'That best line is PC1 (first principal component). The best line at right angles to it is PC2. Together: the best flat 2-D view.', v: { ang: 30, shadow: 1, pc2: 1 } },
+    { say: 'With 5120 numbers you can’t rotate by hand — the computer finds PC1 and PC2 directly. And it never looks at true/false labels.', ex: 'So if the best view happens to split true from false, truth is one of the biggest things varying.', v: { ang: 30, shadow: 1, pc2: 1 } },
+    { say: 'Your turn: drag the angle and watch the spread.', v: { ang: 70, shadow: 1 } },
+  ],
+  code: { file: 'pseudocode · get_pca_components', lines: [
+    'X = acts - acts.mean(dim=0)           # centre the cloud on 0',
+    'C = X.T @ X / (n - 1)                 # how the dims vary together',
+    'vals, vecs = torch.linalg.eigh(C)     # all the “best lines”, ascending',
+    'pcs = vecs[:, argsort(vals, descending=True)[:k]]',
+    'shadows = X @ pcs                     # [n, k] → plot'],
+    steps: [
+      { a: [0], say: 'The line goes through the cloud’s centre, so centre first.', v: { ang: 30 } },
+      { a: [1, 2], say: 'eigh returns every candidate direction with its spread (eigenvalue) — smallest first.', v: { ang: 30, shadow: 1 } },
+      { a: [3], say: 'Biggest spread first; take k columns. These are PC1, PC2.', v: { ang: 30, shadow: 1, pc2: 1 } },
+      { a: [4], say: 'Shadows = dot each centred point with each PC.', v: { ang: 30, shadow: 1, pc2: 1 } },
+    ] },
+});
+
+
+// ---------------- PCA maths worked ----------------
+const RAW = [[7, 5], [3, 1], [6, 2], [4, 4]], MU = [5, 3], CEN = RAW.map(p => [p[0] - MU[0], p[1] - MU[1]]);
+function tbl(rows, head) { return `<table class="grid"><tr>${head.map(x => `<th>${x}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map(x => `<td style="background:#F2F4F5">${x}</td>`).join('')}</tr>`).join('')}</table>`; }
+function rm(v, mode, k, el) {
+  const st = v.st; const centred = st >= 3, pts = (centred ? CEN : RAW).map((p, i) => ({ x: p[0], y: p[1], c: COL.p, r: 8, o: 0.9 }));
+  const lines = [], marks = [];
+  if (st === 2) marks.push({ x: 5, y: 3, c: 'f', label: 'mean (5, 3)' });
+  if (st >= 5) { lines.push({ x1: -3.5, y1: -3.5, x2: 3.5, y2: 3.5, c: 't', w: 4, label: 'PC1 (λ = 4)', clip: 1 }); lines.push({ x1: -2.5, y1: 2.5, x2: 2.5, y2: -2.5, c: 'a', w: 3, dash: 1, label: 'PC2 (λ = 1)', clip: 1 }); }
+  if (st >= 6) CEN.forEach(p => { const d = (p[0] + p[1]) / 2; lines.push({ x1: p[0], y1: p[1], x2: d, y2: d, c: '#B9A8E0', w: 1.5, dash: 1 }); pts.push({ x: d, y: d, c: COL.t, r: 6, o: 1 }); });
+  const lim = centred ? { xr: [-4, 4], yr: [-4, 4] } : { xr: [0, 9], yr: [0, 7] };
+  let h = `<div class="row"><div class="col">${scatterSVG(pts, { ...lim, w: 460, h: 400, lines, marks, xlab: 'neuron 1', ylab: 'neuron 2' })}</div><div class="col" style="font-size:1.05rem">`;
+  if (st <= 2) h += `<div class="lbl">4 statements, 2 neurons each</div>` + tbl(RAW.map((p, i) => ['s' + (i + 1), p[0], p[1]]), ['', 'n1', 'n2']);
+  if (st === 2) h += `<div class="status">mean = ((7+3+6+4)/4, (5+1+2+4)/4) = <b>(5, 3)</b></div>`;
+  if (st >= 3 && st <= 4) h += `<div class="lbl">centred = point − (5, 3)</div>` + tbl(CEN.map((p, i) => ['s' + (i + 1), p[0], p[1]]), ['', 'x', 'y']);
+  if (st === 4) h += `<div class="status">var x = (2²+2²+1²+1²)/4 = <b>2.5</b> · var y = <b>2.5</b><br>cov = (2·2 + 2·2 + 1·(−1) + (−1)·1)/4 = <b>1.5</b><br>C = [[2.5, 1.5], [1.5, 2.5]]</div>`;
+  if (st === 5) h += `<div class="status">eigh(C) → λ = <b>1</b> with (0.71, −0.71), λ = <b>4</b> with (0.71, 0.71)<br>(ascending!) → sort: <b>PC1 = (0.71, 0.71)</b></div>`;
+  if (st === 6) h += tbl(CEN.map((p, i) => ['s' + (i + 1), `(${p[0]})(0.71)+(${p[1]})(0.71)`, ((p[0] + p[1]) * 0.7071).toFixed(2)]), ['', 'shadow on PC1', '=']) + `<div class="status good">variance of shadows = (8 + 8 + 0 + 0)/4 = <b>4 = λ₁</b> → PC1 keeps 4 / 5 = <b>80%</b></div>`;
+  if (st === 7) h += `<div class="status good">Check: C · PC1 = [[2.5,1.5],[1.5,2.5]] · (0.71, 0.71) = (2.83, 2.83) = <b>4</b> × (0.71, 0.71)<br>The matrix only STRETCHES this direction — by its variance.</div>`;
+  if (v.note) h += `<div class="status">${v.note}</div>`;
+  h += `</div></div>`; el.innerHTML = h;
+}
+Stepper('s2m', { render: rm, intuition: [
+  { say: 'Four statements, two neurons each. We run the notebook’s get_pca_components by hand.', v: { st: 1 } },
+  { say: 'Step 1a: the mean of each neuron.', v: { st: 2 } },
+  { say: 'Step 1b: centre — subtract the mean. The cloud now sits around 0.', v: { st: 3 } },
+  { say: 'Step 2: covariance. Variance = average squared distance from 0. Covariance = do the two neurons move together? (we divide by n to keep numbers clean; the notebook uses n − 1)', v: { st: 4 } },
+  { say: 'Step 3: eigenvectors of C — directions C only stretches. eigh returns the SMALLEST eigenvalue first, so we sort.', v: { st: 5 } },
+  { say: 'Step 4: project (shadows on PC1). Their variance is exactly the eigenvalue: 4 of the total 5.', v: { st: 6 } },
+  { say: 'Why eigenvectors? C · v = λ v: the covariance matrix stretches the direction of biggest spread the most.', v: { st: 7 } } ] });
+
+// ---------------- Section 2: PCA on a synthetic 16-dim activation cloud ----------------
+const DIM = 16;
+function unitVec(seed) { const r = seededRand(seed); let v = Array.from({ length: DIM }, () => gauss(r)); const n = Math.hypot(...v); return v.map(x => x / n); }
+function orthTo(v, u) { const d = v.reduce((s, x, i) => s + x * u[i], 0); const w = v.map((x, i) => x - d * u[i]); const n = Math.hypot(...w); return w.map(x => x / n); }
+const U_TRUTH = unitVec(7), U_NUIS = orthTo(unitVec(11), U_TRUTH);
+function makeSet(seed, sep, nuis, noise, n = 220) {
+  const r = seededRand(seed), X = [], y = [];
+  for (let i = 0; i < n; i++) {
+    const lab = i % 2; const a = (lab ? 1 : -1) * sep + gauss(r) * 0.35, b = gauss(r) * nuis;
+    X.push(Array.from({ length: DIM }, (_, d) => a * U_TRUTH[d] + b * U_NUIS[d] + gauss(r) * noise + 2.0)); y.push(lab);
+  }
+  return { X, y };
+}
+const SETS = { cities: makeSet(3, 1.6, 1.1, 0.55), sp_en_trans: makeSet(4, 1.3, 1.0, 0.6), larger_than: makeSet(5, 0.8, 1.7, 0.6) };
+function pca(X, k = 2) {
+  const n = X.length, mu = Array(DIM).fill(0); X.forEach(r => r.forEach((v, d) => mu[d] += v / n));
+  const Xc = X.map(r => r.map((v, d) => v - mu[d]));
+  const C = Array.from({ length: DIM }, () => Array(DIM).fill(0));
+  Xc.forEach(r => { for (let i = 0; i < DIM; i++) for (let j = 0; j < DIM; j++) C[i][j] += r[i] * r[j] / (n - 1); });
+  const vecs = [], vals = []; let M = C.map(r => r.slice());
+  for (let c = 0; c < k; c++) { let v = unitVec(99 + c); for (let it = 0; it < 200; it++) { const w = M.map(r => r.reduce((s, x, j) => s + x * v[j], 0)); const nn = Math.hypot(...w); v = w.map(x => x / nn); }
+    const lam = v.reduce((s, x, i) => s + x * M[i].reduce((t, y, j) => t + y * v[j], 0), 0); vecs.push(v); vals.push(lam);
+    M = M.map((r, i) => r.map((x, j) => x - lam * v[i] * v[j])); }
+  let tot = 0; for (let i = 0; i < DIM; i++) tot += C[i][i];
+  return { Xc, vecs, vals, tot };
+}
+let s2set = 'cities';
+function r2(v, mode, k, el) {
+  const ds = SETS[v.ds || s2set]; if (v.ds) s2set = v.ds;
+  let h = `<div class="ctrl"><label>Dataset:</label><div class="seg" id="s2ds">${Object.keys(SETS).map(n => `<button data-d="${n}" class="${n === s2set ? 'on' : ''}">${n}</button>`).join('')}</div></div>`;
+  const P = pca(ds.X);
+  let pts, xl, yl;
+  if (v.raw) { pts = ds.X.map((r, i) => ({ x: r[3], y: r[9], c: v.color ? (ds.y[i] ? COL.t : COL.f) : COL.g })); xl = 'neuron 3'; yl = 'neuron 9'; }
+  else { const src = v.center || v.proj ? P.Xc : ds.X;
+    if (v.proj) { pts = src.map((r, i) => ({ x: r.reduce((s, x, d) => s + x * P.vecs[0][d], 0), y: r.reduce((s, x, d) => s + x * P.vecs[1][d], 0), c: v.color ? (ds.y[i] ? COL.t : COL.f) : COL.g })); xl = `PC1 (${(P.vals[0] / P.tot * 100).toFixed(0)}% of variance)`; yl = `PC2 (${(P.vals[1] / P.tot * 100).toFixed(0)}%)`; }
+    else { pts = src.map((r, i) => ({ x: r[3], y: r[9], c: COL.g })); xl = 'neuron 3'; yl = 'neuron 9'; } }
+  const lim = v.proj ? { xr: [-4.5, 4.5], yr: [-4.5, 4.5] } : { xr: [-3, 6], yr: [-3, 6] };
+  h += `<div class="row"><div class="col">${scatterSVG(pts, { ...lim, xlab: xl, ylab: yl, w: 560, h: 420, lines: v.center && !v.proj ? [] : [] , marks: v.center && !v.proj ? [{ x: 0, y: 0, c: 'ink', label: 'mean moved to 0' }] : (!v.proj && !v.raw ? [{ x: 2, y: 2, c: 'a', label: 'mean (not at 0)' }] : []) })}</div>`;
+  h += `<div class="col" style="max-width:420px">`;
+  if (v.proj) h += `<div class="stat"><div class="k">PC1</div><div class="v">${(P.vals[0] / P.tot * 100).toFixed(0)}%</div></div><div class="stat"><div class="k">PC2</div><div class="v">${(P.vals[1] / P.tot * 100).toFixed(0)}%</div></div>`;
+  h += `<div style="margin-top:8px">${v.color ? '<span class="chip t">● true</span><span class="chip f">● false</span>' : '<span class="chip g">● no labels used</span>'}</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`;
+  h += `</div></div><div class="illus">Synthetic 16-dim toy (the real activations have 5120 dims). Illustrative.</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('#s2ds button').forEach(b => b.onclick = () => { s2set = b.dataset.d; r2({ ...v, ds: b.dataset.d }, mode, k, el); });
+}
+Stepper('s2', {
+  render: r2,
+  intuition: [
+    { say: 'Each statement is now a point in 5120 dimensions. Plot any two neurons: a shapeless blob.', v: { raw: 1, note: 'Two random coordinates hide almost everything.' } },
+    { say: 'Even if we colour by label, two random neurons show no clean split. Truth is not “one neuron”.', v: { raw: 1, color: 1, note: 'Mixed colours: the truth signal is spread over many neurons — a DIRECTION, not a neuron.' } },
+    { say: 'PCA asks a label-free question: along which directions do the points spread the most? Step 1: move the cloud’s mean to the origin.', v: { center: 1 } },
+    { say: 'Step 2: find the direction of biggest spread (PC1) and the next one at right angles (PC2). Project every point onto them.', ex: 'Like photographing a 3-D object from the angle that shows the most of it.', v: { proj: 1, note: 'Two lumps appear — and PCA has never seen a label.' } },
+    { say: 'Now colour by the label PCA never saw. The lumps ARE true vs false.', v: { proj: 1, color: 1, good: 1, note: 'Truth is one of the biggest things varying in this layer’s activations.' } },
+    { say: 'Switch datasets. cities and sp_en_trans split cleanly; larger_than (numbers) is messier — its biggest spread is something else, truth shows on PC2.', ex: 'The notebook sees the same: curated factual sets are cleaner than numerical reasoning.', v: { proj: 1, color: 1, ds: 'larger_than', note: 'Separation quality varies by dataset. Unsupervised structure is evidence, not proof.' } },
+  ],
+  code: { file: 'pseudocode · get_pca_components', lines: [
+    'X = acts - acts.mean(dim=0)              # [n, d] centre',
+    'C = X.T @ X / (n - 1)                    # [d, d] covariance',
+    'vals, vecs = torch.linalg.eigh(C)        # ASCENDING order!',
+    'order = argsort(vals, descending=True)',
+    'return vecs[:, order[:k]]                # [d, k] columns = PCs',
+    '',
+    'proj = X @ pcs                           # [n, k] → scatter plot'],
+    steps: [
+      { a: [0], say: 'Centre first — otherwise PC1 just points at the mean.', v: { center: 1 } },
+      { a: [1], say: 'Covariance: how every pair of dimensions varies together. d × d.', v: { center: 1 } },
+      { a: [2, 3], say: 'eigh (for symmetric matrices) returns eigenvalues SMALLEST first. Sort descending or you plot the least interesting directions.', v: { center: 1 } },
+      { a: [4], say: 'Eigenvectors are COLUMNS: index vecs[:, order[:k]], not vecs[order[:k]].', v: { proj: 1 } },
+      { a: [6], say: 'Project the centred data onto the PCs and colour by label only when plotting.', v: { proj: 1, color: 1 } },
+    ] },
+});
+
+
+// ---------------- PCA across layers ----------------
+function layerCloud(L) { const r = seededRand(500), pts = [], mix = Math.min(1, L / 3), tr = 1.7 / (1 + Math.exp(-(L - 7) / 1.4)) * (L > 30 ? 0.85 : 1);
+  for (let i = 0; i < 180; i++) { const lab = i % 2, a = gauss(r), b = gauss(r), c = gauss(r); pts.push({ x: mix * (a * 0.9) + (lab ? 1 : -1) * tr + (L === 0 ? 0 : c * 0.25 * mix), y: mix * (b * 1.1), lab }); } return pts; }
+let lyL = 0;
+function rly(v, mode, k, el) {
+  if (v.L != null) lyL = v.L;
+  const pts = layerCloud(lyL).map(p => ({ x: p.x, y: p.y, c: p.lab ? COL.t : COL.f, o: 0.6, r: lyL === 0 ? 9 : 5 }));
+  let h = `<div class="ctrl"><label>Layer:</label><input type="range" min="0" max="39" value="${lyL}" class="slider" id="lyr" style="max-width:480px"><span class="big" style="font-size:1.6rem">${lyL}</span></div>`;
+  h += `<div class="row"><div class="col">${scatterSVG(pts, { xr: [-4, 4], yr: [-3.5, 3.5], w: 560, h: 440, xlab: 'PC1', ylab: 'PC2' })}</div><div class="col" style="max-width:400px"><span class="chip t">● true</span><span class="chip f">● false</span>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : v.bad ? 'bad' : ''}" style="margin-top:10px">${v.note}</div>`;
+  h += `</div></div>`; el.innerHTML = h;
+  el.querySelector('#lyr').oninput = e => { lyL = +e.target.value; rly({ ...v, L: lyL, note: null }, mode, k, el); };
+}
+Stepper('s4b', { render: rly, intuition: [
+  { say: 'Layer 0 = right after the embedding. We take the “.” token — and every statement’s “.” is the SAME word.', ex: 'Same token, same embedding → every statement gives the identical vector.', v: { L: 0, bad: 1, note: 'All 180 statements sit on ONE dot. Nothing to separate yet.' } },
+  { say: 'Layer 2: attention starts copying context into the “.” position. The dots spread out — but true and false are mixed.', v: { L: 2, note: 'The “.” now knows WHICH sentence it ends — not yet whether it is true.' } },
+  { say: 'Layer 6: a split begins to form.', v: { L: 6 } },
+  { say: 'Layer 14: true and false sit on opposite sides — and PCA never saw a label.', v: { L: 14, good: 1, note: 'Truth has been computed and written into the “.” position.' } },
+  { say: 'Layer 36: still split, slightly messier — late layers reshape things for predicting the next word.', v: { L: 36 } },
+  { say: 'Drag the slider yourself.', v: { L: 10 } } ] });
+
+// ---------------- Section 3: layer sweep ----------------
+function accAt(L) { return 0.5 + 0.47 / (1 + Math.exp(-(L - 6) / 1.4)) - 0.09 / (1 + Math.exp(-(L - 29) / 2.5)); }
+function invPhi(p) { // Acklam-ish rational approx
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239], b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572], c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783], d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const pl = 0.02425; let q, r;
+  if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - pl) { q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  q = p - 0.5; r = q * q; return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+let s3L = 2;
+function r3(v, mode, k, el) {
+  if (v.L != null) s3L = v.L;
+  const L = s3L, acc = accAt(L), m = invPhi(acc), r = seededRand(100 + L);
+  const tv = [], fv = []; for (let i = 0; i < 160; i++) { tv.push(m + gauss(r)); fv.push(-m + gauss(r)); }
+  let h = `<div class="ctrl"><label>Layer:</label><input type="range" min="0" max="39" value="${L}" class="slider" id="s3r" style="max-width:520px"><span class="big" style="font-size:1.6rem">${L}</span></div>`;
+  h += `<div class="row"><div class="col"><div class="lbl">test statements projected on the MM direction (x − midpoint)·d</div>${histSVG([{ vals: fv, c: 'f' }, { vals: tv, c: 't' }], { lo: -5, hi: 5, w: 540, h: 230, vlines: [{ x: 0, c: 'ink', dash: 1, label: 'midpoint → predict by sign' }], xlab: 'score' })}
+    <div class="stat"><div class="k">test accuracy</div><div class="v" style="color:${acc > 0.9 ? COL.t : acc > 0.7 ? COL.a : COL.f}">${(acc * 100).toFixed(0)}%</div></div></div>`;
+  if (v.curve) { const pts = Array.from({ length: 40 }, (_, i) => [i, accAt(i)]);
+    h += `<div class="col"><div class="lbl">accuracy by layer (illustrative shape)</div>${lineSVG([{ pts, c: 't' }], { xr: [0, 39], yr: [0.4, 1.02], w: 540, h: 290, yticks: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0], xticks: [0, 5, 10, 15, 20, 25, 30, 35], bands: v.band ? [[8, 20]] : [], vlines: [{ x: 14, c: 'p', label: 'probe layer 14' }], dots: [[L, acc, 'f']], xlab: 'layer', ylab: 'test acc' })}</div>`; }
+  h += `</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}">${v.note}</div>`;
+  el.innerHTML = h;
+  el.querySelector('#s3r').oninput = e => { s3L = +e.target.value; r3({ ...v, L: s3L }, mode, k, el); };
+}
+Stepper('s3', {
+  render: r3,
+  intuition: [
+    { say: 'Same recipe at every layer: direction = mean(true) − mean(false), threshold at the midpoint, accuracy on held-out statements.', ex: 'A cheap “truth-o-meter” at each floor of a 40-floor building.', v: { L: 2, note: 'Layer 2: the two histograms overlap — the model has not worked out truth yet.' } },
+    { say: 'Move to layer 8: the histograms pull apart.', v: { L: 8 } },
+    { say: 'Layer 14 (the paper’s probe layer): a clean split on either side of the midpoint.', v: { L: 14, good: 1, note: 'Clean split → high accuracy with a single direction.' } },
+    { say: 'Layer 38: still decent, but worse. Late layers reshape information for predicting the next token.', v: { L: 38, curve: 1 } },
+    { say: 'The whole curve: truth peaks in early-to-mid layers (~8–20 for Llama-2-13B). Layer 14 sits near the peak.', ex: 'Drag the slider yourself — the red dot follows.', v: { L: 14, curve: 1, band: 1, good: 1, note: 'Answer to the warm-up poll: early-to-mid layers, not the last one.' } },
+  ],
+  code: { file: 'pseudocode · layer_sweep_accuracy', lines: [
+    'perm = randperm(n); train, test = perm[:80%], perm[80%:]',
+    'tr = extract_activations(train_stmts, layers=ALL)   # one pass, all layers',
+    'te = extract_activations(test_stmts,  layers=ALL)',
+    'for L in layers:',
+    '    mu_t, mu_f = tr[L][y==1].mean(0), tr[L][y==0].mean(0)',
+    '    d, mid = mu_t - mu_f, (mu_t + mu_f) / 2',
+    '    pred = ((te[L] - mid) @ d > 0)',
+    '    test_acc[L] = (pred == y_test).float().mean()'],
+    steps: [
+      { a: [0], say: 'Split BEFORE extracting, and fit only on train. Test accuracy is the honest number.', v: { L: 2 } },
+      { a: [1, 2], say: 'Ask for all 40 layers in one forward pass — not 40 passes.', v: { L: 8 } },
+      { a: [4, 5], say: 'Class means on TRAIN only. Direction = difference, bias = midpoint.', v: { L: 14 } },
+      { a: [6, 7], say: 'Centre on the midpoint, dot with d, predict by sign. Compare to labels.', v: { L: 14, curve: 1 } },
+    ] },
+});
+</script></body></html>

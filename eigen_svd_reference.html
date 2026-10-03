@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eigen + SVD reference — TARA</title>
+<style>:root { --teal:#0E7C7B; --teal-lt:#DCEEED; --coral:#E4572E; --coral-lt:#FBE4DC; --purple:#6C4AB6; --purple-lt:#EAE3F7; --amber:#B7791F; --amber-lt:#FDF1D6; --ink:#1A1A1A; --muted:#4F5A63; --line:#C9D0D5; --bg:#F2F4F5; --code:#1E1E2E; }
+* { box-sizing:border-box; }
+html { font-size:20px; }
+@media (min-width:1600px) { html { font-size:22px; } }
+body { font-family:Calibri, Carlito, "Segoe UI", Arial, sans-serif; margin:0; padding:28px 40px 60px; background:#fff; color:var(--ink); line-height:1.35; }
+.wrap { max-width:1720px; margin:0 auto; }
+h1 { font-size:2.1rem; margin:0; }
+.sub { color:var(--muted); font-size:1.1rem; margin:6px 0 22px; }
+.kicker { font-size:0.85rem; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:var(--teal); }
+h2 { font-size:1.45rem; margin:0 0 6px; }
+.panel { border:2px solid var(--line); border-radius:18px; padding:24px 28px; margin-bottom:26px; }
+.desc { color:var(--muted); font-size:1.05rem; margin:0 0 18px; max-width:1300px; }
+code, .mono { font-family:"Courier New", "DejaVu Sans Mono", monospace; }
+button { font-family:inherit; font-size:1rem; font-weight:bold; padding:12px 20px; border-radius:12px; border:2px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+button:hover { border-color:var(--teal); }
+button.primary { background:var(--teal); border-color:var(--teal); color:#fff; }
+button:disabled { opacity:0.35; cursor:not-allowed; }
+.seg { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; flex-wrap:wrap; }
+.seg button { border:none; border-radius:0; color:var(--muted); }
+.seg button + button { border-left:2px solid var(--line); }
+.seg button.on { background:var(--teal); color:#fff; }
+.seg.coral button.on { background:var(--coral); }
+.seg.purple button.on { background:var(--purple); }
+.row { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+.col { flex:1; min-width:360px; }
+.ctrl { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.ctrl label { font-weight:bold; color:var(--muted); }
+/* code + pseudocode pair: each row = [code | plain English] */
+.codepair { display:grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); border-radius:14px; overflow:hidden; border:2px solid var(--code); }
+.codepair .c { background:var(--code); color:#E4E4EF; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.95rem; }
+.codepair .p { background:#FAFBFC; font-size:1rem; }
+.codepair .hd { font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; font-weight:bold; padding:14px 18px 8px; color:#9A9AB0; font-family:Calibri, Carlito, sans-serif; }
+.codepair .hd.p { color:var(--muted); }
+.codepair .pad { height:12px; }
+.ln { padding:4px 18px; border-left:6px solid transparent; transition:background .25s, opacity .25s; }
+.ln.c { white-space:pre-wrap; word-break:break-word; }
+.ln.c.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.ln.p.on { background:var(--teal-lt); border-left-color:var(--teal); font-weight:bold; }
+.ln.c.done { color:#8C8CA6; } .ln.c.done span { color:inherit; } .ln.p.done { color:#8A949C; }
+.kw{color:#D19BE0;} .str{color:#F0A77F;} .com{color:#7FBF7F;} .num{color:#B5CEA8;}
+/* flow diagram */
+.flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; row-gap:14px; }
+.node { border:3px solid var(--line); background:var(--bg); border-radius:14px; padding:10px 14px; min-width:120px; text-align:center; transition:all .3s; }
+.node .t { font-weight:bold; font-size:1.05rem; }
+.node .h { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); margin-top:4px; }
+.node.on { border-color:var(--teal); background:var(--teal-lt); box-shadow:0 0 0 5px rgba(14,124,123,.18); }
+.node.bad { border-color:var(--coral); background:var(--coral-lt); }
+.node.dim { opacity:.35; }
+.arr { align-self:center; font-size:1.6rem; color:var(--muted); padding:0 8px; }
+.status { margin-top:16px; padding:14px 18px; border-radius:12px; background:var(--bg); font-size:1.1rem; min-height:56px; }
+.status.good { background:var(--teal-lt); color:#0a5e5d; }
+.status.bad { background:var(--coral-lt); color:#a53a1b; }
+.note { background:var(--amber-lt); border-radius:12px; padding:14px 18px; font-size:1rem; margin-top:10px; }
+.hgrid { display:inline-grid; gap:3px; }
+.hcell { border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:#fff; font-family:"Courier New",monospace; }
+.axis { font-family:"Courier New",monospace; font-size:0.8rem; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+.big { font-size:2.4rem; font-weight:bold; font-family:"Courier New",monospace; }
+.pill { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.9rem; }
+.keys { position:fixed; right:18px; bottom:14px; font-size:0.8rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+.vec { display:inline-grid; grid-template-columns:repeat(6,18px); gap:2px; vertical-align:middle; }
+.vec div { width:18px; height:18px; border-radius:3px; }
+/* stepper */
+.stepper { border:2px solid var(--line); border-radius:18px; padding:18px 22px; margin:14px 0 26px; background:#fff; }
+.st-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.st-head .st-count { color:var(--muted); margin-left:6px; }
+.st-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr); gap:22px; align-items:start; }
+@media (max-width:1100px) { .st-body { grid-template-columns:1fr; } }
+.st-vis { min-height:380px; }
+.st-say { background:var(--teal-lt); color:#0a5e5d; font-weight:bold; font-size:1.2rem; border-radius:14px; padding:16px 18px; line-height:1.4; }
+.st-ex { margin-top:12px; background:var(--amber-lt); border-radius:14px; padding:12px 16px; font-size:1.02rem; }
+.st-ex b { display:block; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--amber); margin-bottom:4px; }
+.st-code { margin-top:12px; background:var(--code); border-radius:14px; padding:10px 0 12px; font-family:"Courier New","DejaVu Sans Mono",monospace; font-size:0.9rem; color:#E4E4EF; }
+.st-code .hd { font-family:Calibri,Carlito,sans-serif; font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#9A9AB0; font-weight:bold; padding:4px 16px 8px; }
+.st-code .l { padding:4px 16px; white-space:pre-wrap; border-left:6px solid transparent; }
+.st-code .l.on { background:#3A3A5C; border-left-color:#5FC2BF; }
+.st-code .l.future { color:#6A6A84; } .st-code .l.future span { color:inherit !important; }
+.vn { display:inline-grid; gap:3px; }
+.vn div { border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:"Courier New",monospace; font-weight:bold; font-size:0.82rem; border:1px solid #E1E5E8; }
+.bars { display:flex; gap:10px; align-items:flex-end; }
+.bars .b { text-align:center; width:52px; }
+.bars .bt { display:flex; align-items:flex-end; justify-content:center; }
+.bars .bf { width:36px; border-radius:6px 6px 0 0; transition:height .4s; }
+.bars .bv { font-size:0.75rem; color:var(--muted); height:20px; }
+.bars .bl { font-weight:bold; font-family:"Courier New",monospace; margin-top:4px; }
+.vbox { border:3px solid var(--line); border-radius:14px; padding:10px 12px; background:#fff; display:inline-block; vertical-align:top; transition:all .3s; }
+.vbox .vt { font-size:0.8rem; font-weight:bold; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+.vbox.on { border-color:var(--teal); box-shadow:0 0 0 5px rgba(14,124,123,.15); }
+.vbox.dim { opacity:.28; }
+.varr { display:inline-flex; align-items:center; font-size:1.8rem; color:var(--muted); padding:0 6px; align-self:center; }
+.vrow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; row-gap:12px; }
+.picker { display:inline-flex; border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+.picker button { border:none; border-radius:0; width:54px; font-family:"Courier New",monospace; font-size:1.2rem; padding:10px 0; }
+.picker button + button { border-left:2px solid var(--line); }
+.picker button.on { background:var(--purple); color:#fff; }
+.tokrow2 { display:flex; gap:10px; flex-wrap:wrap; }
+.tk2 { min-width:70px; padding:12px 10px; text-align:center; border:3px solid var(--line); border-radius:12px; font-weight:bold; font-size:1.3rem; background:#fff; transition:all .3s; }
+.tk2 small { display:block; font-weight:normal; font-size:0.7rem; color:var(--muted); font-family:"Courier New",monospace; }
+.legend { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+/* presenter bar */
+.pbar { position:sticky; top:0; z-index:50; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.96); padding:10px 0 12px; margin:-6px 0 12px; border-bottom:2px solid var(--line); }
+.pbar button { padding:8px 14px; font-size:0.9rem; border-radius:10px; }
+.pbar button.sec b { color:var(--teal); margin-right:4px; }
+.pbar button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+.pbar button.on b { color:#fff; }
+.pbar .sp { flex:1; }
+.st-head { position:relative; }
+
+sub { font-size:0.62em; color:inherit; opacity:.75; margin-left:1px; }
+.stepper { scroll-margin-top:84px; }
+
+
+.scat { background:#fff; border:2px solid var(--line); border-radius:14px; }
+.lbl { font-size:0.8rem; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:4px 0 6px; }
+.chip { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.85rem; margin:2px 4px 2px 0; }
+.chip.t { background:var(--teal-lt); color:#0a5e5d; } .chip.f { background:var(--coral-lt); color:#a53a1b; } .chip.p { background:var(--purple-lt); color:#4b2f8f; } .chip.a { background:var(--amber-lt); color:#7a4f10; } .chip.g { background:var(--bg); color:var(--muted); }
+.stat { display:inline-block; text-align:center; padding:10px 16px; border-radius:14px; background:var(--bg); margin:6px 8px 6px 0; min-width:120px; }
+.stat .v { font-family:"Courier New",monospace; font-weight:bold; font-size:1.6rem; }
+.stat .k { font-size:0.8rem; color:var(--muted); font-weight:bold; letter-spacing:1px; text-transform:uppercase; }
+.illus { font-size:0.8rem; color:var(--muted); font-style:italic; margin-top:6px; }
+.tokrow { display:flex; flex-wrap:wrap; gap:4px; align-items:flex-end; }
+.tok { font-family:"Courier New",monospace; font-size:0.95rem; padding:6px 8px; border-radius:8px; border:2px solid var(--line); background:#fff; transition:all .3s; white-space:pre; }
+.tok.pad { color:#9aa3aa; background:#F4F5F6; border-style:dashed; }
+.tok.hi { border-color:var(--teal); background:var(--teal-lt); font-weight:bold; }
+.tok.bad { border-color:var(--coral); background:var(--coral-lt); font-weight:bold; }
+.tok.pu { border-color:var(--purple); background:var(--purple-lt); font-weight:bold; }
+.tok.dim { opacity:.35; }
+table.grid { border-collapse:separate; border-spacing:4px; }
+table.grid td, table.grid th { font-family:"Courier New",monospace; font-size:0.9rem; padding:6px 8px; border-radius:8px; text-align:center; }
+table.grid th { color:var(--muted); font-weight:bold; font-size:0.78rem; }
+.slider { width:100%; accent-color:var(--teal); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:1100px) { .two { grid-template-columns:1fr; } }
+.card { border:2px solid var(--line); border-radius:14px; padding:12px 16px; background:#fff; }
+.card h4 { margin:0 0 6px; font-size:1.05rem; }
+.shape { font-family:"Courier New",monospace; font-weight:bold; color:var(--purple); }
+
+.st-body { grid-template-columns:minmax(0,2.2fr) minmax(280px,1fr); }
+.mx2 { font-family:"Courier New",monospace; font-size:1.15rem; background:var(--bg); border-radius:12px; padding:10px 14px; display:inline-block; line-height:1.6; }
+</style></head>
+<body><div class="wrap">
+<div class="kicker">TARA · Week 5 · reference page</div>
+<h1>Eigendecomposition and SVD — a reference for PCA</h1>
+<div class="sub">Why eigenvectors of the covariance matrix are the directions of most variance, what C = QΛQᵀ means, what SVD (X = USVᵀ) is, and why both give the same principal components. Built on the four activation vectors from the PCA-by-hand example.</div>
+
+<h2>0 · What the covariance matrix does to space</h2><div id="e0"></div>
+<h2>1 · A matrix moves arrows — most get turned, a few only get stretched</h2><div id="e1"></div>
+<h2>2 · Why the top eigenvector is the direction of MOST variance</h2><div id="e2"></div>
+<h2>3 · Eigendecomposition: C = Q Λ Qᵀ</h2><div id="e3"></div>
+<h2>4 · Singular value decomposition: X = U S Vᵀ</h2><div id="e4"></div>
+<h2>5 · Same axes: eigenvectors of C = right singular vectors of X</h2><div id="e5"></div>
+
+<div class="note">Reference page for offline study. Covariance matrix C = [[2.5, 2], [2, 2.5]] comes from four centred activation vectors: (2,1), (1,2), (−2,−1), (−1,−2) — the PCA-by-hand example. (We divide by n = 4 to keep numbers clean; the notebook divides by n − 1.)</div>
+</div>
+<script>// ===== TARA kit (shared with Week 4 pages) =====
+
+function seededRand(seed) { let s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+function softmax(arr) { const m = Math.max(...arr.filter(v => v > -1e8)); const ex = arr.map(v => v <= -1e8 ? 0 : Math.exp(v - m)); const s = ex.reduce((a, b) => a + b, 0); return ex.map(v => v / s); }
+
+function argmax(a) { let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; }
+
+function rampColor(w, base = [14, 124, 123]) { const t = Math.max(0, Math.min(1, w)); return `rgb(${Math.round(255 - t * (255 - base[0]))},${Math.round(255 - t * (255 - base[1]))},${Math.round(255 - t * (255 - base[2]))})`; }
+
+function divColor(v, bound = 1) { const t = Math.max(-1, Math.min(1, v / bound)); if (t >= 0) return rampColor(t); return `rgb(255,${Math.round(255 + t * (255 - 87))},${Math.round(255 + t * (255 - 46))})`; }
+
+function hl(line) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  let code = line, com = '';
+  const ci = line.indexOf('#'); if (ci >= 0) { code = line.slice(0, ci); com = line.slice(ci); }
+  let out = esc(code).replace(/("[^"]*"|'[^']*')|\b(def|return|for|in|if|else|lambda|None|True|False|with|try|finally|class)\b|\b(\d+(?:\.\d+)?)\b/g, (m, s, k, n) => s ? `<span class="str">${s}</span>` : k ? `<span class="kw">${k}</span>` : `<span class="num">${n}</span>`);
+  return out + (com ? `<span class="com">${esc(com)}</span>` : '');
+}
+
+function codePair(el, title, rows) {
+  el.classList.add('codepair');
+  el.innerHTML = `<div class="hd c">${title}</div><div class="hd p">what it does</div>` +
+    rows.map((r, i) => `<div class="ln c" data-i="${i}">${r.code ? hl(r.code) : '&nbsp;'}</div><div class="ln p" data-i="${i}">${r.say || '&nbsp;'}</div>`).join('') +
+    `<div class="c pad"></div><div class="p pad"></div>`;
+  return (on = [], doneBelow = -1) => el.querySelectorAll('.ln').forEach(d => { const i = +d.dataset.i; d.classList.toggle('on', on.includes(i)); d.classList.toggle('done', i < doneBelow && !on.includes(i)); });
+}
+
+// ---------------- Stepper: every section = ① Intuition steps, then ② Code steps, one shared visual ----------------
+const STEPPERS = [];
+function Stepper(root, cfg) {
+  // cfg: { intuition:[{say, ex, v}], code:{file, lines:[...], steps:[{a:[...], say, v}]}, render(v, mode, k, vis) }
+  if (typeof root === 'string') root = document.getElementById(root);
+  root.classList.add('stepper');
+  const hasCode = !!cfg.code;
+  root.innerHTML = `<div class="st-head">
+      <div class="seg st-modes"><button data-m="i" class="on">① Intuition</button>${hasCode ? '<button data-m="c">② Pseudocode</button>' : ''}</div>
+      <button class="st-back">◀ Back</button><button class="primary st-next">Next ▶</button><span class="st-count mono"></span></div>
+    <div class="st-body"><div class="st-vis"></div><div class="st-side"><div class="st-say"></div><div class="st-ex"></div><div class="st-code"></div></div></div>`;
+  const q = s => root.querySelector(s);
+  const self = { mode: 'i', k: 0, root };
+  const steps = () => self.mode === 'i' ? cfg.intuition : cfg.code.steps;
+  self.render = () => {
+    const st = steps()[self.k];
+    root.querySelectorAll('.st-modes button').forEach(b => b.classList.toggle('on', b.dataset.m === self.mode));
+    q('.st-say').innerHTML = st.say;
+    q('.st-ex').innerHTML = st.ex ? `<b>Example</b> ${st.ex}` : '';
+    q('.st-ex').style.display = st.ex ? 'block' : 'none';
+    if (self.mode === 'c') {
+      const last = Math.max(...st.a);
+      q('.st-code').style.display = 'block';
+      q('.st-code').innerHTML = `<div class="hd">${cfg.code.file}</div>` + cfg.code.lines.map((l, i) => `<div class="l ${st.a.includes(i) ? 'on' : ''} ${i > last ? 'future' : ''}">${l ? hl(l.replace(/(\S)\s{2,}#/, '$1  #')) : '&nbsp;'}</div>`).join('');
+    } else q('.st-code').style.display = 'none';
+    q('.st-count').textContent = `${self.mode === 'i' ? 'intuition' : 'pseudocode'} · step ${self.k + 1} / ${steps().length}`;
+    q('.st-back').disabled = self.k === 0 && self.mode === 'i';
+    q('.st-next').disabled = self.k === steps().length - 1 && (self.mode === 'c' || !hasCode);
+    q('.st-next').textContent = (self.k === steps().length - 1 && self.mode === 'i' && hasCode) ? 'Go to pseudocode ▶' : 'Next ▶';
+    cfg.render(st.v || {}, self.mode, self.k, q('.st-vis'));
+  };
+  self.next = () => { if (self.k < steps().length - 1) self.k++; else if (self.mode === 'i' && hasCode) { self.mode = 'c'; self.k = 0; } self.render(); };
+  self.back = () => { if (self.k > 0) self.k--; else if (self.mode === 'c') { self.mode = 'i'; self.k = cfg.intuition.length - 1; } self.render(); };
+  q('.st-next').onclick = self.next; q('.st-back').onclick = self.back;
+  root.querySelectorAll('.st-modes button').forEach(b => b.onclick = () => { self.mode = b.dataset.m; self.k = 0; self.render(); });
+  STEPPERS.push(self); self.render();
+  return self;
+}
+// ---------------- presenter mode: one section at a time, tabs, keys, text size, full screen ----------------
+let ACTIVE_ST = null;
+function nearestStepper() {
+  if (ACTIVE_ST && ACTIVE_ST.root.offsetParent !== null) return ACTIVE_ST;
+  const mid = window.innerHeight / 2; let best = STEPPERS[0], bd = 1e9;
+  STEPPERS.forEach(s => { const r = s.root.getBoundingClientRect(); const d = Math.abs((r.top + r.bottom) / 2 - mid); if (r.bottom > 0 && r.top < window.innerHeight && d < bd) { bd = d; best = s; } });
+  return best;
+}
+function setFont(px) { document.documentElement.style.fontSize = px + 'px'; try { localStorage.setItem('tara-font', px); } catch (e) {} }
+function curFont() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
+window.addEventListener('load', () => {
+  try { const f = localStorage.getItem('tara-font'); if (f) setFont(+f); } catch (e) {}
+  const secs = STEPPERS.map(st => { let h = st.root.previousElementSibling; while (h && h.tagName !== 'H2') h = h.previousElementSibling; return { st, h }; });
+  secs.sort((x, y) => (x.st.root.compareDocumentPosition(y.st.root) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  const wrap = document.querySelector('.wrap'); if (!wrap || !secs.length) return;
+  const bar = document.createElement('div'); bar.className = 'pbar';
+  bar.innerHTML = (secs.length > 1 ? secs.map((s, i) => `<button class="sec" data-i="${i}"><b>${i + 1}</b> ${(s.h ? s.h.textContent : 'Section ' + (i + 1)).replace(/^\s*\d+\s*·\s*/, '').split(/ — | – /)[0]}</button>`).join('') : '') +
+    `<span class="sp"></span><button data-a="-" title="smaller text (−)">A−</button><button data-a="+" title="bigger text (+)">A+</button><button data-a="f" title="full screen (F)">⛶</button>` + (secs.length > 1 ? `<button data-a="all" title="show every section (0)">all</button>` : '');
+  const sub = wrap.querySelector('.sub'); (sub || wrap.firstChild).after(bar);
+  let all = secs.length < 2;
+  window.showSection = i => {
+    ACTIVE_ST = all ? null : secs[i].st;
+    secs.forEach((s, j) => { const on = all || j === i; s.st.root.style.display = on ? '' : 'none'; if (s.h) s.h.style.display = on ? '' : 'none'; });
+    bar.querySelectorAll('.sec').forEach(b => b.classList.toggle('on', !all && +b.dataset.i === i));
+    const ab = bar.querySelector('[data-a="all"]'); if (ab) ab.classList.toggle('on', all);
+    if (!all) { const top = bar.getBoundingClientRect().top + window.scrollY; if (window.scrollY > top) window.scrollTo(0, top); }
+  };
+  bar.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.i != null) { all = false; showSection(+b.dataset.i); }
+    else if (b.dataset.a === '+') setFont(curFont() + 2);
+    else if (b.dataset.a === '-') setFont(Math.max(14, curFont() - 2));
+    else if (b.dataset.a === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (b.dataset.a === 'all') { all = !all; showSection(Math.max(0, secs.findIndex(s => s.st === ACTIVE_ST))); }
+  };
+  showSection(0);
+  window._secs = secs.length;
+  const kh = document.createElement('div'); kh.className = 'keys'; kh.textContent = '→ next · ← back' + (secs.length > 1 ? ' · 1–' + secs.length + ' section' : '') + ' · C intuition/pseudocode · + − text size · F full screen'; document.body.appendChild(kh);
+});
+document.addEventListener('keydown', e => {
+  if (!STEPPERS.length || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const best = nearestStepper();
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); best.next(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); best.back(); }
+  else if (/^[1-9]$/.test(e.key) && window.showSection && +e.key <= (window._secs || 0) && window._secs > 1) window.showSection(+e.key - 1);
+  else if (e.key === '+' || e.key === '=') setFont(curFont() + 2);
+  else if (e.key === '-') setFont(Math.max(14, curFont() - 2));
+  else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+  else if (e.key === 'c' || e.key === 'C') { best.mode = best.mode === 'i' ? 'c' : 'i'; best.k = 0; best.render(); }
+});
+
+function gauss(rand) { let u = 0, v = 0; while (u === 0) u = rand(); while (v === 0) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const COL = { t:'#0E7C7B', f:'#E4572E', p:'#6C4AB6', a:'#B7791F', g:'#8A949C', ink:'#1A1A1A', line:'#C9D0D5' };
+// generic SVG scatter. pts: [{x,y,c,o}] ; opts: {w,h,pad,xr,yr,lines:[{x1,y1,x2,y2,c,w,dash,arrow,label}], xlab, ylab}
+function scatterSVG(pts, o = {}) {
+  const W = o.w || 520, H = o.h || 380, P = o.pad || 36;
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const xr = o.xr || [Math.min(...xs), Math.max(...xs)], yr = o.yr || [Math.min(...ys), Math.max(...ys)];
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - 2 * P), sy = y => H - P - (y - yr[0]) / (yr[1] - yr[0]) * (H - 2 * P);
+  const UID = (window._svgN = (window._svgN || 0) + 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><defs>` +
+    ['t','f','p','a','g','ink'].map(k => `<marker id="ar${k}_${UID}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COL[k]}"/></marker>`).join('') + `</defs>`;
+  if (o.axes !== false) { s += `<line x1="${P}" y1="${H - P}" x2="${W - P / 2}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/><line x1="${P}" y1="${H - P}" x2="${P}" y2="${P / 2}" stroke="#C9D0D5" stroke-width="2"/>`;
+    if (o.xlab) s += `<text x="${W - P}" y="${H - 10}" text-anchor="end" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.xlab}</text>`;
+    if (o.ylab) s += `<text x="12" y="${P / 2 + 4}" font-size="17" fill="#4F5A63" font-family="Calibri,Carlito,sans-serif" font-weight="bold">${o.ylab}</text>`; }
+  (o.under || []).forEach(q => { s += q(sx, sy); });
+  pts.forEach(p => { s += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${p.r || 5}" fill="${p.c || COL.g}" fill-opacity="${p.o ?? 0.7}" ${p.s ? `stroke="${p.s}" stroke-width="2.5"` : ''}/>`; });
+  s += `<clipPath id="cp${W}${H}"><rect x="${P}" y="${P / 2}" width="${W - 1.5 * P}" height="${H - 1.5 * P}"/></clipPath>`;
+  (o.lines || []).forEach(l => { const col = COL[l.c] || l.c; s += `<line x1="${sx(l.x1)}" y1="${sy(l.y1)}" x2="${sx(l.x2)}" y2="${sy(l.y2)}" stroke="${col}" stroke-width="${l.w || 3}" ${l.clip ? `clip-path="url(#cp${W}${H})"` : ''} ${l.dash ? 'stroke-dasharray="8 6"' : ''} ${l.arrow ? `marker-end="url(#ar${l.c}_${UID})"` : ''}/>`;
+    if (l.label) s += `<text x="${sx(l.x2) + (l.dx || 6)}" y="${sy(l.y2) + (l.dy || -6)}" font-size="18" font-weight="bold" fill="${col}" font-family="Calibri,Carlito,sans-serif">${l.label}</text>`; });
+  (o.marks || []).forEach(m => { s += `<g><circle cx="${sx(m.x)}" cy="${sy(m.y)}" r="9" fill="#fff" stroke="${COL[m.c] || m.c}" stroke-width="4"/>${m.label ? `<text x="${sx(m.x) + 12}" y="${sy(m.y) + 5}" font-size="17" font-weight="bold" fill="${COL[m.c] || m.c}" font-family="Calibri,Carlito,sans-serif">${m.label}</text>` : ''}</g>`; });
+  (o.texts || []).forEach(t => { s += `<text x="${sx(t.x)}" y="${sy(t.y)}" font-size="${t.size || 17}" font-weight="bold" fill="${COL[t.c] || t.c || '#4F5A63'}" text-anchor="${t.anchor || 'start'}" font-family="Calibri,Carlito,sans-serif">${t.t}</text>`; });
+  return s + '</svg>';
+}
+// simple line/curve chart: series [{pts:[[x,y]..], c, dash, w}]
+function lineSVG(series, o = {}) {
+  const W = o.w || 520, H = o.h || 300, P = 44;
+  const xr = o.xr, yr = o.yr;
+  const sx = x => P + (x - xr[0]) / (xr[1] - xr[0]) * (W - P - 16), sy = y => H - P + 6 - (y - yr[0]) / (yr[1] - yr[0]) * (H - P - 20);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat">`;
+  (o.yticks || []).forEach(v => { s += `<line x1="${P}" x2="${W - 16}" y1="${sy(v)}" y2="${sy(v)}" stroke="#EEF0F2"/><text x="${P - 6}" y="${sy(v) + 5}" font-size="16" text-anchor="end" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.xticks || []).forEach(v => { s += `<text x="${sx(v)}" y="${H - P + 24}" font-size="16" text-anchor="middle" fill="#7A858E" font-family="Calibri,Carlito,sans-serif">${v}</text>`; });
+  (o.bands || []).forEach(b => { s += `<rect x="${sx(b[0])}" y="${sy(yr[1])}" width="${sx(b[1]) - sx(b[0])}" height="${sy(yr[0]) - sy(yr[1])}" fill="${b[2] || '#DCEEED'}" opacity=".6"/>`; });
+  series.forEach(se => { s += `<polyline fill="none" stroke="${COL[se.c] || se.c}" stroke-width="${se.w || 3}" ${se.dash ? 'stroke-dasharray="7 6"' : ''} points="${se.pts.map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ')}"/>`; });
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${sy(yr[0])}" y2="${sy(yr[1])}" stroke="${COL[v.c] || v.c}" stroke-width="2" stroke-dasharray="6 5"/>${v.label ? `<text x="${sx(v.x) + 6}" y="${sy(yr[1]) + 16}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  (o.dots || []).forEach(d => { s += `<circle cx="${sx(d[0])}" cy="${sy(d[1])}" r="7" fill="${COL[d[2]] || d[2]}" stroke="#fff" stroke-width="2"/>`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  if (o.ylab) s += `<text x="14" y="${H / 2}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" transform="rotate(-90 14 ${H / 2})" font-family="Calibri,Carlito,sans-serif">${o.ylab}</text>`;
+  return s + '</svg>';
+}
+function histSVG(groups, o = {}) { // groups: [{vals, c}] ; draws overlaid histograms
+  const W = o.w || 520, H = o.h || 220, P = 30, lo = o.lo, hi = o.hi, nb = o.bins || 28;
+  const bw = (hi - lo) / nb; let mx = 1; const hs = groups.map(g => { const h = Array(nb).fill(0); g.vals.forEach(v => { const i = Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / bw))); h[i]++; }); mx = Math.max(mx, ...h); return h; });
+  const sx = x => P + (x - lo) / (hi - lo) * (W - 2 * P);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" class="scat"><line x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}" stroke="#C9D0D5" stroke-width="2"/>`;
+  hs.forEach((h, gi) => h.forEach((c, i) => { if (!c) return; const hh = c / mx * (H - 2 * P); s += `<rect x="${sx(lo + i * bw) + 1}" y="${H - P - hh}" width="${(W - 2 * P) / nb - 2}" height="${hh}" fill="${COL[groups[gi].c] || groups[gi].c}" opacity="0.55" rx="2"/>`; }));
+  (o.vlines || []).forEach(v => { s += `<line x1="${sx(v.x)}" x2="${sx(v.x)}" y1="${P / 2}" y2="${H - P}" stroke="${COL[v.c] || v.c}" stroke-width="3" ${v.dash ? 'stroke-dasharray="6 5"' : ''}/>${v.label ? `<text x="${sx(v.x) + 6}" y="${P / 2 + 12}" font-size="16" font-weight="bold" fill="${COL[v.c] || v.c}" font-family="Calibri,Carlito,sans-serif">${v.label}</text>` : ''}`; });
+  if (o.xlab) s += `<text x="${W / 2}" y="${H - 6}" font-size="16" text-anchor="middle" fill="#4F5A63" font-weight="bold" font-family="Calibri,Carlito,sans-serif">${o.xlab}</text>`;
+  return s + '</svg>';
+}
+
+const Cm = [[2.5, 2], [2, 2.5]], X = [[2, 1], [1, 2], [-2, -1], [-1, -2]], NAMES = ['Paris–France ✓', 'uno–one ✓', 'uno–tree ✗', 'Paris–Japan ✗'];
+const mul = (M, v) => [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];
+
+// ---------- E0 covariance geometry ----------
+const CL = (() => { const r = seededRand(9), L = [[Math.sqrt(2.5), 0], [2 / Math.sqrt(2.5), Math.sqrt(2.5 - 4 / 2.5)]]; return Array.from({ length: 60 }, () => { const a = gauss(r), b = gauss(r); return [L[0][0] * a, L[1][0] * a + L[1][1] * b]; }); })();
+function r0(v, mode, k, el) { const pts = v.cloud ? CL.map(p => ({ x: p[0], y: p[1], c: COL.p, o: 0.25, r: 4 })) : []; const lines = [];
+  for (let i = 0; i < 48; i++) { const t = i * Math.PI / 24, u = [Math.cos(t), Math.sin(t)]; if (v.circle) pts.push({ x: u[0], y: u[1], c: COL.g, r: 3, o: 1 }); if (v.ell) { const Cu = mul(Cm, u); pts.push({ x: Cu[0] / 1.6, y: Cu[1] / 1.6, c: COL.t, r: 3.5, o: 1 }); } }
+  if (v.axes) { lines.push({ x1: -2.81, y1: -2.81, x2: 2.81, y2: 2.81, c: 'p', w: 3, label: 'stretch 4.5', clip: 1 }); lines.push({ x1: -0.31, y1: 0.31, x2: 0.31, y2: -0.31, c: 'a', w: 4, label: '0.5' }); }
+  let h = `<div class="row"><div class="col">${scatterSVG(pts, { xr: [-4, 4], yr: [-4, 4], w: 460, h: 460, lines, axes: false })}</div><div class="col" style="max-width:380px"><div class="mx2">C = [[2.5, 2],<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2, 2.5]]</div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`; h += `</div></div>`; el.innerHTML = h; }
+Stepper('e0', { render: r0, intuition: [
+  { say: 'A cloud of centred activation vectors: tilted, longer along one diagonal.', v: { cloud: 1, note: 'var(dim 1) = 2.5, var(dim 2) = 2.5, cov = 2 → they rise together → tilted.' } },
+  { say: 'Draw every direction of length 1: a circle.', v: { cloud: 1, circle: 1 } },
+  { say: 'Multiply every direction by C. The circle becomes an ELLIPSE — stretched along the same diagonal as the cloud.', v: { cloud: 1, circle: 1, ell: 1, good: 1, note: 'C “knows” the shape of the cloud: it stretches space most where the data is most spread.' } },
+  { say: 'The ellipse’s long axis: stretch 4.5. Short axis: 0.5. These axes are the eigenvectors; the stretches are the eigenvalues = variances.', v: { cloud: 1, circle: 1, ell: 1, axes: 1, good: 1, note: 'Longest axis of the ellipse = direction of most variance = PC1.' } } ] });
+
+// ---------- E1 ----------
+let e1n = 8;
+function r1(v, mode, k, el) {
+  const lines = []; const N = v.n || 8; let txt = '';
+  for (let i = 0; i < N; i++) { const t = i * Math.PI / N, u = [Math.cos(t), Math.sin(t)], Cu = mul(Cm, u), ang = Math.abs(Math.atan2(u[0] * Cu[1] - u[1] * Cu[0], u[0] * Cu[0] + u[1] * Cu[1]) * 180 / Math.PI), eig = ang < 1;
+    if (v.show !== 'after') lines.push({ x1: 0, y1: 0, x2: u[0], y2: u[1], c: 'g', w: 3, arrow: 1 });
+    if (v.show !== 'before') lines.push({ x1: 0, y1: 0, x2: Cu[0] / 2, y2: Cu[1] / 2, c: eig ? 't' : 'f', w: eig ? 5 : 2.5, arrow: 1 });
+    if (v.show === 'pair') lines.push({ x1: u[0], y1: u[1], x2: Cu[0] / 2, y2: Cu[1] / 2, c: '#C9D0D5', w: 1, dash: 1 }); }
+  let h = `<div class="row"><div class="col">${scatterSVG([], { xr: [-2.6, 2.6], yr: [-2.6, 2.6], w: 460, h: 460, lines, axes: false })}</div><div class="col" style="max-width:380px">`;
+  h += `<div class="mx2">C = [[2.5, 2],<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2, 2.5]]</div><div style="margin-top:10px"><span class="chip g">grey = arrow u</span><span class="chip f">red = C·u, turned</span><span class="chip t">teal = C·u, only stretched</span></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}" style="margin-top:10px">${v.note}</div>`; h += `</div></div>`; el.innerHTML = h; }
+Stepper('e1', { render: r1, intuition: [
+  { say: '8 directions u, all length 1.', v: { show: 'before', n: 8 } },
+  { say: 'Multiply each by C (drawn at half size). Most arrows come out pointing somewhere ELSE: C turned them.', v: { show: 'pair', n: 8 } },
+  { say: 'Two directions come out pointing the SAME way — only stretched. Those are the eigenvectors: (1,1) stretched by 4.5, (1,−1) by 0.5.', v: { show: 'after', n: 8, good: 1, note: 'Every other arrow gets pulled TOWARD the (1,1) direction — the direction C stretches most.' } },
+  { say: 'With 24 directions the pattern is clearer: the arrows fan toward the top eigenvector.', v: { show: 'after', n: 24 } } ] });
+// ---------- E2 ----------
+let e2a = 0;
+function r2(v, mode, k, el) { if (v.a != null) e2a = v.a; const t = e2a * Math.PI / 180, u = [Math.cos(t), Math.sin(t)], vr = u[0] * mul(Cm, u)[0] + u[1] * mul(Cm, u)[1];
+  const proj = X.map(p => p[0] * u[0] + p[1] * u[1]), pts = X.map((p, i) => ({ x: p[0], y: p[1], c: i < 2 ? COL.t : COL.f, r: 9, o: 1 }));
+  proj.forEach(d => pts.push({ x: d * u[0], y: d * u[1], c: COL.p, r: 5, o: 1 }));
+  const lines = [{ x1: -3 * u[0], y1: -3 * u[1], x2: 3 * u[0], y2: 3 * u[1], c: 'p', w: 3, clip: 1, label: 'u' }]; X.forEach((p, i) => lines.push({ x1: p[0], y1: p[1], x2: proj[i] * u[0], y2: proj[i] * u[1], c: '#B9A8E0', w: 1.5, dash: 1 }));
+  const curve = Array.from({ length: 181 }, (_, a) => { const tt = a * Math.PI / 180, uu = [Math.cos(tt), Math.sin(tt)], Cu = mul(Cm, uu); return [a, uu[0] * Cu[0] + uu[1] * Cu[1]]; });
+  let h = `<div class="ctrl"><label>direction u:</label><input type="range" min="0" max="180" value="${e2a}" class="slider" id="e2r" style="max-width:360px"><span class="big" style="font-size:1.4rem">${e2a}°</span></div><div class="row"><div class="col">${scatterSVG(pts, { xr: [-3, 3], yr: [-3, 3], w: 400, h: 400, lines })}</div><div class="col">`;
+  h += `<div class="lbl">variance along u = uᵀ C u, for every angle</div>` + lineSVG([{ pts: curve, c: 'p' }], { xr: [0, 180], yr: [0, 5], w: 440, h: 240, yticks: [0, 1, 2, 3, 4, 5], xticks: [0, 45, 90, 135, 180], dots: [[e2a, vr, 'f']], vlines: [{ x: 45, c: 't', label: 'eigenvector (λ=4.5)' }, { x: 135, c: 'a', label: 'λ=0.5' }], xlab: 'angle of u', ylab: 'variance' });
+  h += `<div class="stat"><div class="k">variance along u</div><div class="v">${vr.toFixed(2)}</div></div>`;
+  if (v.note) h += `<div class="status ${v.good ? 'good' : ''}">${v.note}</div>`; h += `</div></div>`; el.innerHTML = h; el.querySelector('#e2r').oninput = e => { e2a = +e.target.value; r2({ ...v, a: e2a, note: null }, mode, k, el); }; }
+Stepper('e2', { render: r2, intuition: [
+  { say: 'Four centred activation vectors. Project them onto a direction u; the spread of the projections = variance along u = uᵀ C u.', v: { a: 0 } },
+  { say: 'Sweep every angle: the variance curve has ONE peak — exactly at the top eigenvector (45°), where it equals λ₁ = 4.5.', v: { a: 45, good: 1, note: 'Why? Write u as a mix of the eigenvectors: uᵀCu = λ₁·(share on PC1)² + λ₂·(share on PC2)². Any mix is an average of λ₁ and λ₂ — so it is biggest when ALL of u is on the λ₁ eigenvector.' } },
+  { say: 'At right angles (135°) you get the minimum: λ₂ = 0.5. That is PC2 — the most variance once PC1’s direction is used up.', v: { a: 135 } },
+  { say: 'Drag u yourself.', v: { a: 20 } } ] });
+// ---------- E3 ----------
+function r3(v, mode, k, el) { const s = 0.7071; let h = `<div class="row"><div class="col" style="font-size:1.1rem">`;
+  h += `<div class="mx2">C = Q Λ Qᵀ</div><br><br>`;
+  if (v.s >= 1) h += `<div class="card"><h4>Q = eigenvectors as columns</h4><span class="mx2">[[0.71, 0.71],<br>&nbsp;[0.71, −0.71]]</span><div class="legend">column 1 = PC1 (1,1)/√2 · column 2 = PC2 (1,−1)/√2 · at right angles</div></div>`;
+  if (v.s >= 2) h += `<div class="card" style="margin-top:8px"><h4>Λ = eigenvalues on the diagonal</h4><span class="mx2">[[4.5, 0],<br>&nbsp;[0, 0.5]]</span><div class="legend">variance along PC1 = 4.5, along PC2 = 0.5 · total = 5 = trace of C</div></div>`;
+  if (v.s >= 3) h += `<div class="card" style="margin-top:8px;border-color:var(--teal)"><h4>Read it as three moves</h4>Qᵀ: rotate into the PC axes → Λ: stretch each axis by its variance → Q: rotate back</div>`;
+  h += `</div></div>`; el.innerHTML = h; }
+Stepper('e3', { render: r3, intuition: [{ say: 'Any symmetric matrix (like a covariance matrix) can be written as Q Λ Qᵀ.', v: { s: 1 } }, { say: 'Λ holds the eigenvalues — the variances along each eigenvector.', v: { s: 2 } }, { say: 'So C is just: rotate, stretch along the eigenvectors, rotate back. torch.linalg.eigh(C) returns Λ (ascending) and Q.', v: { s: 3 } }] });
+// ---------- E4 ----------
+function r4(v, mode, k, el) { const s = 0.7071; let h = `<div class="row"><div class="col" style="font-size:1.05rem">`;
+  h += `<div class="lbl">centred data matrix X (one row per statement)</div><table class="grid">${X.map((r, i) => `<tr><th style="text-align:right">${NAMES[i]}</th><td style="background:#F2F4F5">${r[0]}</td><td style="background:#F2F4F5">${r[1]}</td></tr>`).join('')}</table>`;
+  if (v.s >= 1) h += `<div class="card" style="margin-top:10px"><h4>X = U S Vᵀ</h4><b>V</b> (right singular vectors) = directions in activation space<br><b>S</b> (singular values) = how much the data stretches along each<br><b>U</b> = each statement’s coordinate along each, scaled</div>`;
+  if (v.s >= 2) h += `<div class="card" style="margin-top:8px"><h4>For our X</h4><span class="mx2">V = [[0.71, 0.71], [0.71, −0.71]]<br>S = [4.24, 1.41]</span></div>`;
+  if (v.s >= 3) h += `<div class="card" style="margin-top:8px;border-color:var(--teal)"><h4>U·S = the PCA scores</h4>${X.map((r, i) => `${NAMES[i]}: PC1 = ${((r[0] + r[1]) * s).toFixed(2)}`).join('<br>')}</div>`;
+  h += `</div></div>`; el.innerHTML = h; }
+Stepper('e4', { render: r4, intuition: [{ say: 'SVD works on the data matrix X itself — no covariance matrix needed.', v: { s: 0 } }, { say: 'It factors X into rotate (Vᵀ) · stretch (S) · rotate (U).', v: { s: 1 } }, { say: 'The numbers for our four statements.', v: { s: 2 } }, { say: 'U times S gives each statement’s coordinates on the PCs — PC1 splits true from false.', v: { s: 3 } }] });
+// ---------- E5 ----------
+function r5(v, mode, k, el) { let h = `<div class="row"><div class="col" style="font-size:1.1rem">`;
+  h += `<div class="card" style="border-color:var(--purple)"><h4 style="color:var(--purple)">Route A · eigen (the notebook)</h4>C = XᵀX / n → eigh(C)<br>PC1 = (0.71, 0.71) · λ₁ = 4.5</div>`;
+  h += `<div class="card" style="margin-top:8px;border-color:var(--amber)"><h4 style="color:var(--amber)">Route B · SVD (e.g. sklearn PCA)</h4>X = U S Vᵀ<br>V₁ = (0.71, 0.71) · s₁ = 4.24 → s₁² / n = 18 / 4 = 4.5</div>`;
+  h += `<div class="status good" style="margin-top:10px">Same directions. λ = s² / n (or s² / (n − 1) with the notebook’s convention).<br>Why: XᵀX = V S² Vᵀ — the eigenvectors of XᵀX are exactly V.</div>`;
+  if (v.s >= 2) h += `<div class="status" style="margin-top:8px">Which to use? Same answer. SVD avoids building XᵀX (which squares the numbers and loses precision) → sklearn uses it. eigh on the covariance is simple and fine for our sizes → the notebook uses it.</div>`;
+  h += `</div></div>`; el.innerHTML = h; }
+Stepper('e5', { render: r5, intuition: [{ say: 'Two routes, same PCs.', v: { s: 1 } }, { say: 'When would you pick one over the other?', v: { s: 2 } }] });
+</script></body></html>

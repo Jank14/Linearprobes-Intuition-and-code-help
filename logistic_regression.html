@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logistic regression probe</title>
+<style>
+:root{--teal:#0E7C7B;--teal-lt:#DCEEED;--teal-dk:#0A5E5D;--coral:#E4572E;--coral-lt:#FBE4DC;--purple:#6C4AB6;--purple-lt:#EAE3F7;--amber:#B7791F;--amber-lt:#FDF1D6;--ink:#1A1A1A;--muted:#4F5A63;--line:#C9D0D5;--bg:#F2F4F5;--code:#1E1E2E}
+*{box-sizing:border-box}
+html{font-size:24px}
+@media (max-width:1300px){html{font-size:19px}}
+body{margin:0;background:#fff;color:var(--ink);font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif;line-height:1.3}
+.top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+.top .t{font-weight:bold;font-size:1.05rem;margin-right:10px}
+.top .t span{color:var(--teal)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{font:inherit;font-size:.72rem;font-weight:bold;border:2px solid var(--line);background:#fff;border-radius:10px;padding:5px 10px;cursor:pointer;color:var(--muted)}
+.tabs button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.tabs button.cur{border-style:dashed}
+.tabs .sep{align-self:center;color:var(--muted);font-size:.7rem;font-weight:bold;margin:0 4px}
+.sp{flex:1}
+.ctl button{font:inherit;font-size:.75rem;font-weight:bold;border:2px solid var(--line);background:#fff;border-radius:10px;padding:5px 12px;cursor:pointer}
+main{max-width:1800px;margin:0 auto;padding:14px 24px}
+h1{font-size:1.6rem;margin:4px 0 8px}
+.stage{border:2px solid var(--line);border-radius:18px;overflow:hidden;background:#fff}
+svg{display:block;width:100%;height:auto;user-select:none;touch-action:none}
+svg text{font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif}
+.say{display:flex;gap:16px;align-items:center;margin-top:12px}
+.say .msg{flex:1;background:var(--teal-lt);color:var(--teal-dk);font-weight:bold;font-size:1.25rem;border-radius:16px;padding:14px 20px;min-height:3.2em;display:flex;align-items:center}
+.say button{font:inherit;font-size:1rem;font-weight:bold;border-radius:14px;padding:14px 22px;border:2px solid var(--line);background:#fff;cursor:pointer}
+.say button.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.say .cnt{font-family:"Courier New",monospace;color:var(--muted);font-size:.8rem;min-width:5em;text-align:center}
+.hint{color:var(--muted);font-size:.75rem;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="top">
+ <div class="t">Logistic regression <span>probe</span></div>
+ <div class="tabs" id="tabs"></div>
+ <div class="sp"></div>
+ <div class="ctl"><button id="bminus">A−</button> <button id="bplus">A+</button> <button id="bfull">⛶</button></div>
+</div>
+<main>
+ <h1 id="h"></h1>
+ <div class="stage"><svg id="st" viewBox="0 0 1600 760"></svg></div>
+ <div class="say"><button id="back">◀</button><div class="msg" id="msg"></div><span class="cnt" id="cnt"></span><button class="primary" id="next">Next ▶</button></div>
+ <div class="hint">→ / ← next · 1–9, 0 jump to a section · drag on the picture to turn the line · F full screen</div>
+</main>
+<script>
+/* ================= data: two stretched clouds (illustrative) ================= */
+const C0={teal:'#0E7C7B',coral:'#E4572E',purple:'#6C4AB6',amber:'#B7791F',ink:'#1A1A1A',muted:'#4F5A63',line:'#C9D0D5',bg:'#F2F4F5',grey:'#9AA3AB',tealLt:'#DCEEED',coralLt:'#FBE4DC',purpleLt:'#EAE3F7',amberLt:'#FDF1D6'};
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};const g=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const U=d=>{const r=d*Math.PI/180;return [Math.cos(r),Math.sin(r)];};
+const UA=U(35),NA=U(125);
+function makeCloud(rot){const P=[],Y=[];const ua=U(35+rot),na=U(125+rot);
+  for(let i=0;i<60;i++){const y=i<30?1:0;const s=y?1:-1;const a=Math.max(-1.7,Math.min(1.7,g()*1.0))+s*0.5,b=s*0.62+Math.max(-0.4,Math.min(0.4,g()*0.17));P.push([a*ua[0]+b*na[0],a*ua[1]+b*na[1]]);Y.push(y);}return {P,Y};}
+seed=7;const A=makeCloud(0);
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+const sig=z=>1/(1+Math.exp(-z));
+function lossOf(w,b,D){let L=0;D.P.forEach((p,i)=>{const z=dot(w,p)+b;const pr=sig(z);const pc=D.Y[i]?pr:1-pr;L+=-Math.log(Math.max(pc,1e-9));});return L/D.P.length;}
+function accOf(w,b,D){let c=0;D.P.forEach((p,i)=>{if(((dot(w,p)+b)>0?1:0)===D.Y[i])c++;});return c/D.P.length;}
+function gradStep(w,b,D,lr=0.6,l2=0.002){let gw=[0,0],gb=0;D.P.forEach((p,i)=>{const e=sig(dot(w,p)+b)-D.Y[i];gw[0]+=e*p[0];gw[1]+=e*p[1];gb+=e;});const n=D.P.length;
+  return {w:[w[0]-lr*(gw[0]/n+l2*w[0]),w[1]-lr*(gw[1]/n+l2*w[1])],b:b-lr*gb/n};}
+const W0=[0.75,0.45],B0=0.3;
+// precompute training trajectory
+const TRAJ=[{w:W0.slice(),b:B0}];for(let k=0;k<400;k++){const s=TRAJ[TRAJ.length-1];TRAJ.push(gradStep(s.w,s.b,A));}
+const FIN=TRAJ[TRAJ.length-1];
+function mmOf(D){const m1=[0,0],m0=[0,0];let n1=0,n0=0;D.P.forEach((p,i)=>{if(D.Y[i]){m1[0]+=p[0];m1[1]+=p[1];n1++;}else{m0[0]+=p[0];m0[1]+=p[1];n0++;}});
+  m1[0]/=n1;m1[1]/=n1;m0[0]/=n0;m0[1]/=n0;const d=[m1[0]-m0[0],m1[1]-m0[1]];const mid=[(m1[0]+m0[0])/2,(m1[1]+m0[1])/2];return {d,mid,m1,m0,b:-dot(d,mid)};}
+const MM=mmOf(A);
+/* ================= svg ================= */
+const NS='http://www.w3.org/2000/svg';const st=document.getElementById('st');
+function el(t,a,p,txt){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!==undefined)e.textContent=txt;(p||st).appendChild(e);return e;}
+function clear(){while(st.firstChild)st.removeChild(st.firstChild);const d=el('defs',{});for(const [k,c] of Object.entries(C0)){const m=el('marker',{id:'a-'+k,viewBox:'0 0 10 10',refX:'8',refY:'5',markerWidth:'4.5',markerHeight:'4.5',orient:'auto-start-reverse'},d);el('path',{d:'M0,0 L10,5 L0,10 z',fill:c},m);}}
+function txt(x,y,s,size=30,fill=C0.ink,extra={}){return el('text',Object.assign({x,y,'font-size':size,fill},extra),st,s);}
+function arrow(x1,y1,x2,y2,c,w=6){return el('line',{x1,y1,x2,y2,stroke:C0[c]||c,'stroke-width':w,'marker-end':`url(#a-${c})`,'stroke-linecap':'round'});}
+const PX=400,PY=380,SC=120;const MX=x=>PX+x*SC,MY=y=>PY-y*SC;const IX=px=>(px-PX)/SC,IY=py=>(PY-py)/SC;
+const RX=860,RW=680;
+function frame(){el('rect',{x:30,y:30,width:740,height:700,rx:18,fill:'#fff',stroke:C0.line,'stroke-width':2});}
+function cloud(D,o={}){D.P.forEach((p,i)=>{const c=D.Y[i]?C0.teal:C0.coral;const r=o.r||9;
+  if(o.sq)el('rect',{x:MX(p[0])-r,y:MY(p[1])-r,width:2*r,height:2*r,fill:c,opacity:o.alpha||0.85});else el('circle',{cx:MX(p[0]),cy:MY(p[1]),r,fill:c,opacity:o.alpha||0.85});
+  if(o.ring&&o.ring(i))el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:r+7,fill:'none',stroke:C0.ink,'stroke-width':3});});}
+function lineWB(w,b,c,wd=6,dash){ // points with w·x+b=0 ; clip to plot
+  const n=Math.hypot(w[0],w[1]);const u=[-w[1]/n,w[0]/n];const p0=[-b*w[0]/(n*n),-b*w[1]/(n*n)];const L=2.9;
+  el('line',{x1:MX(p0[0]-L*u[0]),y1:MY(p0[1]-L*u[1]),x2:MX(p0[0]+L*u[0]),y2:MY(p0[1]+L*u[1]),stroke:c,'stroke-width':wd,'stroke-dasharray':dash||'none','stroke-linecap':'round'});
+  return {p0,u,n};}
+function wArrow(w,b,c){const n=Math.hypot(...w);const p0=[-b*w[0]/(n*n),-b*w[1]/(n*n)];const v=[w[0]/n,w[1]/n];arrow(MX(p0[0]),MY(p0[1]),MX(p0[0]+0.9*v[0]),MY(p0[1]+0.9*v[1]),c,6);txt(MX(p0[0]+1.05*v[0]),MY(p0[1]+1.05*v[1]),'w',30,C0[c]||c,{'font-weight':'bold'});}
+function sideLabels(w,b){const n=Math.hypot(...w);const p0=[-b*w[0]/(n*n),-b*w[1]/(n*n)];const v=[w[0]/n,w[1]/n];
+  txt(MX(p0[0]+1.9*v[0]),MY(p0[1]+1.9*v[1]),'TRUE side',26,C0.teal,{'font-weight':'bold','text-anchor':'middle'});txt(MX(p0[0]-1.9*v[0]),MY(p0[1]-1.9*v[1]),'FALSE side',26,C0.coral,{'font-weight':'bold','text-anchor':'middle'});}
+function stat(x,y,label,val,c){el('rect',{x,y,width:210,height:110,rx:14,fill:C0.bg});txt(x+16,y+36,label,22,C0.muted);txt(x+16,y+88,val,44,c||C0.ink,{'font-weight':'bold','font-family':'Courier New'});}
+function lossCurve(k){const x0=RX,y0=640,w=RW,h=300;const Ls=TRAJ.map(s=>lossOf(s.w,s.b,A));const mx=Math.max(...Ls)*1.05;
+  el('line',{x1:x0,y1:y0,x2:x0+w,y2:y0,stroke:C0.ink,'stroke-width':2});el('line',{x1:x0,y1:y0,x2:x0,y2:y0-h,stroke:C0.ink,'stroke-width':2});
+  txt(x0,y0-h-14,'total loss while training',24,C0.muted);txt(x0+w,y0+34,'training steps →',22,C0.muted,{'text-anchor':'end'});
+  let d='';for(let i=0;i<=k;i+=2)d+=(i?'L':'M')+(x0+i/400*w)+','+(y0-Ls[i]/mx*h);el('path',{d,fill:'none',stroke:C0.purple,'stroke-width':5});
+  el('circle',{cx:x0+k/400*w,cy:y0-Ls[k]/mx*h,r:10,fill:C0.amber});}
+/* ================= state ================= */
+let step=0,anim=null,wcur=W0.slice(),bcur=B0,zoomW=1,alpha=0,hover=-1;
+function playTrain(done){if(anim)cancelAnimationFrame(anim);step=0;const f=()=>{step=Math.min(400,step+3);render();if(step<400)anim=requestAnimationFrame(f);else{anim=null;done&&done();}};anim=requestAnimationFrame(f);}
+let drag=false;
+function sp(e){const p=st.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(st.getScreenCTM().inverse());}
+st.addEventListener('pointerdown',e=>{const q=sp(e);if(q.x<780&&SCN().drag){drag=true;st.setPointerCapture(e.pointerId);turn(q);}});
+st.addEventListener('pointermove',e=>{const q=sp(e);if(drag)turn(q);else if(SCN().hover){let best=-1,bd=1e9;A.P.forEach((p,i)=>{const d=Math.hypot(MX(p[0])-q.x,MY(p[1])-q.y);if(d<bd){bd=d;best=i;}});hover=bd<30?best:-1;render();}});
+st.addEventListener('pointerup',()=>drag=false);
+function turn(q){const a=Math.atan2(IY(q.y),IX(q.x));const n=Math.hypot(...FIN.w);wcur=[n*Math.cos(a),n*Math.sin(a)];bcur=0;render();}
+/* ================= scenes ================= */
+const SECTIONS=[
+ {title:'1 · Watch logistic regression train',steps:[
+  {say:'The task (from the slides): find the line that best separates TRUE (teal) from FALSE (red). Start with a bad guess.',s:{train:'start'},f:()=>{step=0;}},
+  {say:'Training: measure how wrong the line is, nudge it, repeat. Watch the line turn and the loss fall.',s:{train:'play'},f:()=>playTrain()},
+  {say:'Done: the line runs along the GAP between the clouds. Its arrow w (one weight per dimension) is the probe direction.',s:{train:'end'},f:()=>{step=400;}},
+  {say:'Two questions: what is the loss we just pushed down — and why the S-shaped “sigmoid”? Next sections.',s:{train:'end'},f:()=>{step=400;}}]},
+ {title:'2 · Why the sigmoid',steps:[
+  {say:'The line gives every statement a number: logit = w·x + b. Positive = TRUE side, negative = FALSE side, far = confident.',s:{sig:1}},
+  {say:'But a logit can be anything (−7, +12…). We want a PROBABILITY between 0 and 1.',s:{sig:2}},
+  {say:'A hard step (0 or 1) gives probabilities — but it is flat: a tiny nudge of the line changes nothing, so training can’t tell which way to move.',s:{sig:3}},
+  {say:'The sigmoid is a SMOOTH step: logit 0 → 0.5, big positive → ~1, big negative → ~0. Every nudge changes it a little → we can learn.',s:{sig:4},drag:false},
+  {say:'Bigger w = steeper sigmoid = more confident. Drag the slider.',s:{sig:4,slider:true}}]},
+ {title:'3 · The loss: how wrong is the line?',steps:[
+  {say:'For each statement: the probability the probe gave to the RIGHT answer. Loss = −log of it.',s:{loss:1},hover:true},
+  {say:'Right and sure (0.9) → 0.11. Unsure (0.5) → 0.69. Confident and WRONG (0.1) → 2.30. Hover any dot.',s:{loss:2},hover:true},
+  {say:'Total loss = average over all statements. Drag to turn the line: a bad line has a big total loss.',s:{loss:3},drag:true,hover:true,f:()=>{wcur=[FIN.w[0],FIN.w[1]];bcur=FIN.b;}}]},
+ {title:'4 · Training = walking downhill',steps:[
+  {say:'Every way the line could point has a total loss. Plot it: a valley.',s:{hill:1}},
+  {say:'Training starts somewhere high and repeatedly steps DOWNHILL (the gradient says which way is down).',s:{hill:2},f:()=>playTrain()},
+  {say:'The bottom of the valley = the trained probe. sklearn does this for us (an optimiser loop), with a small penalty on big weights (C = 0.1).',s:{hill:2},f:()=>{step=400;}}]},
+ {title:'5 · MM vs LR on the same clouds',steps:[
+  {say:'MM: arrow between the two centres, line at right angles through the midpoint. It ignores the clouds’ tilt.',s:{cmp:1}},
+  {say:'LR: trained on every point → its line follows the gap.',s:{cmp:2}},
+  {say:'Both are accurate-ish, but the DIRECTIONS differ (cosine below 1). Which one does the model use? → causal section.',s:{cmp:3}}]},
+ {title:'6 · Generalisation: train on one dataset, test on another',steps:[
+  {say:'Train on cities (circles). Now test on a different dataset (squares) whose truth direction is the same.',s:{gen:1},f:()=>{alpha=0;}},
+  {say:'If the other dataset’s truth direction is turned (the probe learned “city facts”, not truth), accuracy falls. Drag the slider.',s:{gen:2,slider2:true},f:()=>{alpha=40;}},
+  {say:'Do this for every pair → a grid. High off-diagonal = one general truth direction (paper: LR transfers almost perfectly at 13B+).',s:{gen:3}}]},
+ {title:'7 · The notebook’s LRProbe',steps:[
+  {say:'Rescale every dimension (StandardScaler) → fit LogisticRegression(C = 0.1, no intercept) → copy the weights into a Linear layer + Sigmoid.',s:{code:1}}]}
+];
+let sec=0,stp=0;const SCN=()=>SECTIONS[sec].steps[stp];
+function render(){clear();const S=SCN().s||{};
+  if(S.train){frame();const s=TRAJ[Math.min(step,400)];cloud(A,{ring:i=>((dot(s.w,A.P[i])+s.b)>0?1:0)!==A.Y[i]});lineWB(s.w,s.b,C0.amber,7);wArrow(s.w,s.b,'purple');
+    if(step>=400)sideLabels(s.w,s.b);
+    const mis=A.P.filter((p,i)=>((dot(s.w,p)+s.b)>0?1:0)!==A.Y[i]).length;
+    stat(RX,60,'mistakes (ringed)',String(mis),mis?C0.coral:C0.teal);stat(RX+235,60,'accuracy',Math.round(100*accOf(s.w,s.b,A))+'%',C0.teal);stat(RX+470,60,'step',String(step),C0.muted);
+    lossCurve(Math.min(step,400));return;}
+  if(S.sig){renderSig(S);return;}
+  if(S.loss){renderLoss(S);return;}
+  if(S.hill){renderHill(S);return;}
+  if(S.cmp){renderCmp(S);return;}
+  if(S.gen){renderGen(S);return;}
+  if(S.code){renderCode();return;}
+}
+function renderSig(S){const w=[FIN.w[0]*zoomW,FIN.w[1]*zoomW],b=FIN.b*zoomW;
+  frame();cloud(A,{alpha:0.5,r:7});lineWB(w,b,C0.amber,6);
+  const picks=[5,40,22];picks.forEach((i,k)=>{const p=A.P[i];el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:16,fill:'none',stroke:C0.purple,'stroke-width':4});txt(MX(p[0])+18,MY(p[1])-14,String.fromCharCode(65+k),28,C0.purple,{'font-weight':'bold'});});
+  // right: logit axis and curve
+  const x0=RX+20,xw=RW-40,zmax=8;const Z=z=>x0+(z+zmax)/(2*zmax)*xw;
+  if(S.sig>=1){el('line',{x1:x0,y1:700,x2:x0+xw,y2:700,stroke:C0.ink,'stroke-width':3});[-8,-4,0,4,8].forEach(z=>{txt(Z(z),735,String(z).replace('-','−'),22,C0.muted,{'text-anchor':'middle'});el('line',{x1:Z(z),y1:690,x2:Z(z),y2:710,stroke:C0.ink,'stroke-width':2});});
+    txt(x0,670,'logit = w·x + b',24,C0.muted);
+    A.P.forEach((p,i)=>{const z=Math.max(-zmax,Math.min(zmax,dot(w,p)+b));el('circle',{cx:Z(z),cy:700,r:7,fill:A.Y[i]?C0.teal:C0.coral,opacity:0.5});});
+    picks.forEach((i,k)=>{const z=Math.max(-zmax,Math.min(zmax,dot(w,A.P[i])+b));txt(Z(z),660-0*k,String.fromCharCode(65+k),26,C0.purple,{'text-anchor':'middle','font-weight':'bold'});});}
+  const Py=p=>580-p*400;
+  if(S.sig>=2){el('line',{x1:x0,y1:Py(0),x2:x0+xw,y2:Py(0),stroke:C0.line,'stroke-width':2});el('line',{x1:x0,y1:Py(1),x2:x0+xw,y2:Py(1),stroke:C0.line,'stroke-width':2});
+    txt(x0-8,Py(1)+8,'1',22,C0.muted,{'text-anchor':'end'});txt(x0-8,Py(0)+8,'0',22,C0.muted,{'text-anchor':'end'});txt(x0-8,Py(0.5)+8,'0.5',22,C0.muted,{'text-anchor':'end'});
+    txt(x0,Py(1)-20,'probability P(true)',24,C0.muted);}
+  if(S.sig===2){txt(x0+xw/2,Py(0.5),'?',90,C0.amber,{'text-anchor':'middle','font-weight':'bold'});}
+  if(S.sig===3){el('path',{d:`M${Z(-8)},${Py(0)} L${Z(0)},${Py(0)} L${Z(0)},${Py(1)} L${Z(8)},${Py(1)}`,fill:'none',stroke:C0.grey,'stroke-width':6});txt(Z(-6),Py(0.15),'flat → no hint which way to move',24,C0.coral,{'font-weight':'bold'});}
+  if(S.sig>=4){let d='';for(let z=-zmax;z<=zmax;z+=0.1)d+=(z===-zmax?'M':'L')+Z(z)+','+Py(sig(z));el('path',{d,fill:'none',stroke:C0.amber,'stroke-width':6});
+    picks.forEach((i,k)=>{const zr=dot(w,A.P[i])+b;const z=Math.max(-zmax,Math.min(zmax,zr));el('line',{x1:Z(z),y1:700,x2:Z(z),y2:Py(sig(zr)),stroke:C0.purple,'stroke-width':2,'stroke-dasharray':'6 5'});
+      el('circle',{cx:Z(z),cy:Py(sig(zr)),r:10,fill:C0.purple});txt(Z(z)+14,Py(sig(zr))-12,`${String.fromCharCode(65+k)}: ${sig(zr).toFixed(2)}`,24,C0.purple,{'font-weight':'bold'});});}
+  if(S.slider){txt(RX+20,50,'confidence |w| ×'+zoomW.toFixed(1),26,C0.ink,{'font-weight':'bold'});const sx=RX+20,sw=400;el('line',{x1:sx,y1:80,x2:sx+sw,y2:80,stroke:C0.line,'stroke-width':8,'stroke-linecap':'round'});
+    const kx=sx+(zoomW-0.2)/2.8*sw;const k=el('circle',{cx:kx,cy:80,r:16,fill:C0.teal,style:'cursor:pointer'});
+    const mv=e=>{const q=sp(e);zoomW=Math.max(0.2,Math.min(3,0.2+(q.x-sx)/sw*2.8));render();};k.addEventListener('pointerdown',e=>{e.stopPropagation();window.addEventListener('pointermove',mv);window.addEventListener('pointerup',()=>window.removeEventListener('pointermove',mv),{once:true});});}
+}
+function renderLoss(S){const w=wcur,b=bcur;frame();lineWB(w,b,C0.amber,6);wArrow(w,b,'purple');
+  const costs=A.P.map((p,i)=>{const pr=sig(dot(w,p)+b);const pc=A.Y[i]?pr:1-pr;return -Math.log(Math.max(pc,1e-9));});
+  A.P.forEach((p,i)=>{const r=6+Math.min(16,costs[i]*6);el('circle',{cx:MX(p[0]),cy:MY(p[1]),r,fill:A.Y[i]?C0.teal:C0.coral,opacity:0.75});});
+  txt(50,710,'dot size = its loss',22,C0.muted);
+  if(S.loss>=2){const rows=[[0.9,'right and sure',C0.teal],[0.5,'unsure',C0.amber],[0.1,'confident and WRONG',C0.coral]];rows.forEach(([p,l,c],k)=>{const y=80+k*95;el('rect',{x:RX,y,width:RW,height:80,rx:14,fill:C0.bg});
+    txt(RX+20,y+52,`P(right) = ${p}`,30,C0.ink);txt(RX+300,y+52,l,26,c,{'font-weight':'bold'});txt(RX+RW-20,y+52,'loss '+(-Math.log(p)).toFixed(2),30,c,{'font-weight':'bold','text-anchor':'end'});});}
+  if(hover>=0){const p=A.P[hover];const pr=sig(dot(w,p)+b);const pc=A.Y[hover]?pr:1-pr;el('circle',{cx:MX(p[0]),cy:MY(p[1]),r:22,fill:'none',stroke:C0.ink,'stroke-width':3});
+    el('rect',{x:RX,y:390,width:RW,height:110,rx:14,fill:C0.purpleLt});txt(RX+20,430,`this statement is ${A.Y[hover]?'TRUE':'FALSE'} · P(true) = ${pr.toFixed(2)}`,26,C0.ink);txt(RX+20,478,`P(right) = ${pc.toFixed(2)} → loss = −log ${pc.toFixed(2)} = ${(-Math.log(pc)).toFixed(2)}`,26,C0.purple,{'font-weight':'bold'});}
+  if(S.loss>=3){const L=costs.reduce((a,c)=>a+c,0)/costs.length;el('rect',{x:RX,y:540,width:RW,height:150,rx:16,fill:C0.tealLt});txt(RX+20,590,'total loss (average)',28,C0.ink);txt(RX+20,665,L.toFixed(3),60,L<0.3?C0.teal:C0.coral,{'font-weight':'bold','font-family':'Courier New'});
+    txt(RX+330,650,`accuracy ${Math.round(100*accOf(w,b,A))}%`,30,C0.muted);}
+}
+function renderHill(S){frame();const s=TRAJ[Math.min(step,400)];cloud(A,{alpha:0.5,r:7});lineWB(s.w,s.b,C0.amber,6);wArrow(s.w,s.b,'purple');
+  const n=Math.hypot(...FIN.w);const angs=[];for(let a=-180;a<=180;a+=3)angs.push(a);
+  const Lof=a=>{const w=[n*Math.cos(a*Math.PI/180),n*Math.sin(a*Math.PI/180)];return lossOf(w,0,A);};const Ls=angs.map(Lof);const mx=Math.max(...Ls);
+  const gx=a=>RX+(a+180)/360*RW,gy=L=>640-L/mx*480;
+  el('line',{x1:RX,y1:640,x2:RX+RW,y2:640,stroke:C0.ink,'stroke-width':2});txt(RX,110,'total loss for every way the line can point',24,C0.muted);txt(RX,676,'direction of w →',22,C0.muted);
+  let d='';angs.forEach((a,i)=>d+=(i?'L':'M')+gx(a)+','+gy(Ls[i]));el('path',{d,fill:'none',stroke:C0.purple,'stroke-width':5});
+  const ac=Math.atan2(s.w[1],s.w[0])*180/Math.PI;el('circle',{cx:gx(ac),cy:gy(Lof(ac)),r:16,fill:C0.amber,stroke:'#fff','stroke-width':3});
+  if(S.hill>=2&&step>=400){txt(gx(ac),gy(Lof(ac))+52,'trained probe',26,C0.teal,{'text-anchor':'middle','font-weight':'bold'});}}
+function renderCmp(S){frame();const mis=(w,b)=>A.P.map((p,i)=>((dot(w,p)+b)>0?1:0)!==A.Y[i]);
+  const mmMis=mis(MM.d,MM.b),lrMis=mis(FIN.w,FIN.b);
+  cloud(A,{ring:i=>S.cmp===1?mmMis[i]:(S.cmp===2?lrMis[i]:false)});
+  if(S.cmp===1||S.cmp===3){arrow(MX(MM.m0[0]),MY(MM.m0[1]),MX(MM.m1[0]),MY(MM.m1[1]),'purple',6);el('circle',{cx:MX(MM.mid[0]),cy:MY(MM.mid[1]),r:10,fill:'#fff',stroke:C0.ink,'stroke-width':3});lineWB(MM.d,MM.b,C0.purple,5,'12 9');}
+  if(S.cmp>=2)lineWB(FIN.w,FIN.b,C0.amber,7);
+  const a1=accOf(MM.d,MM.b,A),a2=accOf(FIN.w,FIN.b,A);
+  el('rect',{x:RX,y:80,width:RW,height:130,rx:16,fill:C0.purpleLt});txt(RX+20,130,'MM (dashed purple)',30,C0.purple,{'font-weight':'bold'});txt(RX+20,185,`accuracy ${Math.round(a1*100)}% · ${mmMis.filter(Boolean).length} mistakes`,28,C0.ink);
+  if(S.cmp>=2){el('rect',{x:RX,y:230,width:RW,height:130,rx:16,fill:C0.amberLt});txt(RX+20,280,'LR (solid amber)',30,C0.amber,{'font-weight':'bold'});txt(RX+20,335,`accuracy ${Math.round(a2*100)}% · ${lrMis.filter(Boolean).length} mistakes`,28,C0.ink);}
+  if(S.cmp>=3){const c=dot(MM.d,FIN.w)/Math.hypot(...MM.d)/Math.hypot(...FIN.w);el('rect',{x:RX,y:390,width:RW,height:150,rx:16,fill:C0.tealLt});
+    txt(RX+20,445,`cosine(MM, LR) = ${c.toFixed(2)}`,36,C0.teal,{'font-weight':'bold'});txt(RX+20,500,'similar accuracy, DIFFERENT directions',28,C0.ink);
+    txt(RX,600,'(illustrative 2-D clouds — the notebook prints the real',22,C0.muted);txt(RX,630,' accuracies and cosine for cities)',22,C0.muted);}}
+function renderGen(S){frame();seed=11;const B=makeCloud(alpha);cloud(A,{alpha:0.25,r:7});cloud(B,{sq:true,r:8});lineWB(FIN.w,FIN.b,C0.amber,7);
+  txt(50,710,'○ cities (trained on) · ■ other dataset (tested on)',22,C0.muted);
+  const aA=accOf(FIN.w,FIN.b,A),aB=accOf(FIN.w,FIN.b,B);
+  if(S.gen<3){stat(RX,60,'accuracy: cities',Math.round(aA*100)+'%',C0.teal);stat(RX+260,60,'accuracy: other',Math.round(aB*100)+'%',aB>0.85?C0.teal:C0.coral);}
+  if(S.slider2){txt(RX,250,`other dataset’s truth turned by ${alpha}°`,26,C0.ink,{'font-weight':'bold'});const sx=RX,sw=520;el('line',{x1:sx,y1:290,x2:sx+sw,y2:290,stroke:C0.line,'stroke-width':8,'stroke-linecap':'round'});
+    const k=el('circle',{cx:sx+alpha/90*sw,cy:290,r:16,fill:C0.teal,style:'cursor:pointer'});const mv=e=>{const q=sp(e);alpha=Math.round(Math.max(0,Math.min(90,(q.x-sx)/sw*90)));render();};
+    k.addEventListener('pointerdown',e=>{e.stopPropagation();window.addEventListener('pointermove',mv);window.addEventListener('pointerup',()=>window.removeEventListener('pointermove',mv),{once:true});});
+    txt(RX,370,'0° = same truth direction → transfers',24,C0.teal);txt(RX,405,'big angle = it learned something dataset-specific',24,C0.coral);}
+  if(S.gen===3){const names=['cities','sp_en_trans','larger_than'];const V=[[0.99,0.95,0.91],[0.96,0.99,0.90],[0.93,0.94,0.97]];const x0=RX+180,y0=120,c=150;
+    txt(RX,90,'trained on ↓  tested on →  (illustrative)',24,C0.muted);
+    names.forEach((n,i)=>{txt(x0-12,y0+i*c+c/2+8,n,22,C0.ink,{'text-anchor':'end'});txt(x0+i*c+c/2,y0+3*c+34,n,22,C0.ink,{'text-anchor':'middle'});
+      names.forEach((m,j)=>{const v=V[i][j];el('rect',{x:x0+j*c,y:y0+i*c,width:c-6,height:c-6,rx:10,fill:i===j?C0.teal:C0.tealLt});txt(x0+j*c+c/2-3,y0+i*c+c/2+12,v.toFixed(2),34,i===j?'#fff':C0.teal,{'text-anchor':'middle','font-weight':'bold'});});});}}
+function renderCode(){const lines=[['scaler = StandardScaler()','every dimension → mean 0, spread 1 (so none dominates)'],['X = scaler.fit_transform(acts)',''],['lr = LogisticRegression(C=0.1, fit_intercept=False)','C = 0.1: penalise big weights → simpler line'],['lr.fit(X, labels)','the optimiser loop: walk downhill on the loss'],['probe.net[0].weight = lr.coef_','5120 weights = the probe direction w'],['P(true) = sigmoid(w · (x − mean) / scale)','scoring a new statement']];
+  lines.forEach(([c,w],i)=>{const y=60+i*110;el('rect',{x:40,y,width:820,height:84,rx:14,fill:'#1E1E2E'});txt(64,y+52,c,26,'#E4E4EF',{'font-family':'Courier New'});txt(890,y+52,w,24,C0.ink);});}
+/* ================= nav ================= */
+const tabs=document.getElementById('tabs');
+SECTIONS.forEach((s,i)=>{const b=document.createElement('button');b.textContent=(i+1);b.title=s.title;b.onclick=()=>go(i,0);tabs.appendChild(b);});
+function go(i,k){sec=i;stp=k;if(anim){cancelAnimationFrame(anim);anim=null;}hover=-1;const s=SECTIONS[sec];document.getElementById('h').textContent=s.title;
+  document.querySelectorAll('#tabs button').forEach((b,j)=>b.classList.toggle('on',j===sec));
+  const S=SCN();document.getElementById('msg').textContent=S.say;document.getElementById('cnt').textContent=`${stp+1} / ${s.steps.length}`;
+  if(S.f)S.f();render();try{history.replaceState(null,'','#'+(sec+1));}catch(e){}}
+function next(){const s=SECTIONS[sec];if(stp<s.steps.length-1)go(sec,stp+1);else if(sec<SECTIONS.length-1)go(sec+1,0);}
+function back(){if(stp>0)go(sec,stp-1);else if(sec>0)go(sec-1,SECTIONS[sec-1].steps.length-1);}
+document.getElementById('next').onclick=next;document.getElementById('back').onclick=back;
+let fsz=24;const fs=d=>{fsz=Math.max(16,Math.min(34,fsz+d*2));document.documentElement.style.fontSize=fsz+'px';};
+document.getElementById('bminus').onclick=()=>fs(-1);document.getElementById('bplus').onclick=()=>fs(1);
+const full=()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();else document.exitFullscreen();};
+document.getElementById('bfull').onclick=full;
+window.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}else if(e.key==='ArrowLeft'){e.preventDefault();back();}
+  else if(/^[1-9]$/.test(e.key)){const i=+e.key-1;if(i<SECTIONS.length)go(i,0);}else if(e.key==='f'||e.key==='F')full();else if(e.key==='+'||e.key==='=')fs(1);else if(e.key==='-')fs(-1);});
+const h0=parseInt((location.hash||'#1').slice(1));go(h0>=1&&h0<=SECTIONS.length?h0-1:0,0);
+</script>
+</body>
+</html>
